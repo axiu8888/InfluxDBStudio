@@ -46,6 +46,7 @@ function Find-MSBuild {
     }
 
     $candidates = @(
+        'D:\develop\ide\VisualStudio\2022\Community\MSBuild\Current\Bin\MSBuild.exe',
         'E:\DevTools\VisualStudio\2022\Community\MSBuild\Current\Bin\MSBuild.exe',
         "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe",
         "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe",
@@ -119,17 +120,20 @@ Write-Host "InfluxDB Studio pack" -ForegroundColor Green
 Write-Host "Root: $Root"
 Write-Host "Configuration: $Configuration"
 
+$msbuild = Find-MSBuild
+$msbuildDir = Split-Path -Parent $msbuild
+Write-Host "MSBuild: $msbuild"
+
 if (-not $SkipRestore) {
     Write-Step 'Restore NuGet packages'
     $nuget = Get-NuGet
-    & $nuget restore $Solution -NonInteractive
+    # Pass MSBuildPath so nuget does not scan a broken PATH for msbuild.exe
+    & $nuget restore $Solution -NonInteractive -MSBuildPath $msbuildDir
     if ($LASTEXITCODE -ne 0) { throw "nuget restore failed with exit code $LASTEXITCODE" }
 }
 
 if (-not $SkipBuild) {
     Write-Step "Build $Configuration"
-    $msbuild = Find-MSBuild
-    Write-Host "MSBuild: $msbuild"
     & $msbuild $Solution /t:Rebuild /p:Configuration=$Configuration /p:Platform='Any CPU' /m /v:minimal /nologo
     if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE" }
 }
