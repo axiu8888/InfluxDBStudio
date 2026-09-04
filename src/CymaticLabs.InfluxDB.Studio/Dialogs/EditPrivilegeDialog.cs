@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Dialogs
 {
@@ -46,6 +47,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         public EditPrivilegeDialog()
         {
             InitializeComponent();
+            Localization.Apply(this);
 
             // Setup the privilege drop down with values dynamically
             foreach (InfluxDbPrivileges p in Enum.GetValues(typeof(InfluxDbPrivileges)))

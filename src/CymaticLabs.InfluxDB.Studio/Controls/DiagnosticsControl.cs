@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -22,6 +23,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public DiagnosticsControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
         }
 
         #endregion Constructors
@@ -64,8 +66,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
 
             // System
             pidValue.Text = diagnostics.PID.ToString();
-            currentTimeValue.Text = diagnostics.CurrentTime.ToString();
-            startedValue.Text = diagnostics.Started.ToString();
+            currentTimeValue.Text = AppForm.Settings.FormatDateTime(diagnostics.CurrentTime);
+            startedValue.Text = AppForm.Settings.FormatDateTime(diagnostics.Started);
             var ut = diagnostics.Uptime;
             uptimeValue.Text = string.Format("{0}d {1}h {2}m {3}s {4}ms", ut.Days, ut.Hours, ut.Minutes, ut.Seconds, ut.Milliseconds);
 

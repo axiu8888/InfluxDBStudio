@@ -70,5 +70,41 @@ namespace CymaticLabs.InfluxDB.Studio.Properties {
                 this["DateFormat"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string Language {
+            get {
+                return ((string)(this["Language"]));
+            }
+            set {
+                this["Language"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string QueryFavoritesJson {
+            get {
+                return ((string)(this["QueryFavoritesJson"]));
+            }
+            set {
+                this["QueryFavoritesJson"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string QueryHistoryJson {
+            get {
+                return ((string)(this["QueryHistoryJson"]));
+            }
+            set {
+                this["QueryHistoryJson"] = value;
+            }
+        }
     }
 }

@@ -1,6 +1,7 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -24,6 +25,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public TagKeysControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
         }
 
         #endregion Constructors
@@ -37,10 +39,10 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             if (tagKeys == null || tagKeys.Count() == 0) return;
 
             // Add default row count column
-            listView.Columns.Add(new ColumnHeader() { Text = "#" });
+            listView.Columns.Add(new ColumnHeader() { Text = Localization.T("#") });
 
             // Add tag key column
-            listView.Columns.Add(new ColumnHeader() { Text = "tagKey" });
+            listView.Columns.Add(new ColumnHeader() { Text = Localization.T("tagKey") });
 
             // Add values
             var rowCount = 0;

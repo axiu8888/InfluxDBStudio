@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -20,7 +21,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         private System.Windows.Forms.ToolStripMenuItem closeAllButThisMenuItem;
         private System.Windows.Forms.ToolStripMenuItem closeAllMenuItem;
 
-        // Used when selected "Close All But This" in the tab context menu
+        // Used when selected "Close Other" in the tab context menu
         TabPage tabToLeave;
 
         #endregion Fields
@@ -112,7 +113,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             DrawMode = TabDrawMode.OwnerDrawFixed;
             SizeMode = TabSizeMode.Fixed;
 
-            // Initialize tab context meu
+            // Initialize tab context menu
             this.tabContextMenuStrip = new System.Windows.Forms.ContextMenuStrip();
             this.closeTabMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.closeAllButThisMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -130,11 +131,13 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             this.closeTabMenuItem.Text = "Close";
             this.closeTabMenuItem.Click += CloseMenuItem_Click;
 
-            this.closeAllButThisMenuItem.Text = "Close All But This";
+            this.closeAllButThisMenuItem.Text = "Close Other";
             this.closeAllButThisMenuItem.Click += CloseAllButThisMenuItem_Click;
 
             this.closeAllMenuItem.Text = "Close All";
             this.closeAllMenuItem.Click += CloseAllMenuItem_Click;
+
+            Localization.Apply(this);
         }
 
         #endregion Constructors
@@ -184,7 +187,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             CloseTab(SelectedTab);
         }
 
-        // Handles click of tab context menu "Close All But This"
+        // Handles click of tab context menu "Close Other"
         private void CloseAllButThisMenuItem_Click(object sender, EventArgs e)
         {
             if (tabToLeave == null) return;

@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CymaticLabs.InfluxDB.Data;
 using CymaticLabs.InfluxDB.Studio.Dialogs;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -62,6 +63,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public InfluxDbUsersControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
 
             createUserDialog = new CreateUserDialog();
             editUserDialog = new EditUserDialog();
@@ -189,7 +191,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                     {
                         if (li.Text == user.Name)
                         {
-                            AppForm.DisplayError("User already exists: " + user.Name, "Create Error");
+                            AppForm.DisplayError(Localization.Format("User already exists: {0}", user.Name), "Create Error");
                             return;
                         }
                     }
@@ -302,7 +304,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 if (user == null) return;
 
                 // Confirm drop
-                if (MessageBox.Show(string.Format("Drop user: {0}?", user.Name), "Confirm User Drop", 
+                if (MessageBox.Show(Localization.Format("Drop user: {0}?", user.Name), Localization.T("Confirm User Drop"), 
                     MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.Cancel)
                 {
                     return;

@@ -31,6 +31,7 @@
             this.components = new System.ComponentModel.Container();
             this.toolStrip = new System.Windows.Forms.ToolStrip();
             this.createCqButton = new System.Windows.Forms.ToolStripButton();
+            this.editCqButton = new System.Windows.Forms.ToolStripButton();
             this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.dropCqButton = new System.Windows.Forms.ToolStripButton();
             this.toolStripSeparator2 = new System.Windows.Forms.ToolStripSeparator();
@@ -40,6 +41,7 @@
             this.columnHeader = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.contextMenuStrip = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.createCQToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.editCQToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.dropCQToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.queryEditor = new ScintillaNET.Scintilla();
             this.toolStrip.SuspendLayout();
@@ -54,6 +56,7 @@
             // 
             this.toolStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.createCqButton,
+            this.editCqButton,
             this.toolStripSeparator1,
             this.dropCqButton,
             this.toolStripSeparator2,
@@ -73,6 +76,17 @@
             this.createCqButton.Text = "Create CQ";
             this.createCqButton.ToolTipText = "Create Continuous Query";
             this.createCqButton.Click += new System.EventHandler(this.createCqButton_Click);
+            // 
+            // editCqButton
+            // 
+            this.editCqButton.Enabled = false;
+            this.editCqButton.Image = global::CymaticLabs.InfluxDB.Studio.Properties.Resources.EditUser;
+            this.editCqButton.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.editCqButton.Name = "editCqButton";
+            this.editCqButton.Size = new System.Drawing.Size(67, 22);
+            this.editCqButton.Text = "Edit CQ";
+            this.editCqButton.ToolTipText = "Edit Continuous Query";
+            this.editCqButton.Click += new System.EventHandler(this.editCqButton_Click);
             // 
             // toolStripSeparator1
             // 
@@ -135,9 +149,12 @@
             this.listView.Size = new System.Drawing.Size(776, 205);
             this.listView.Sorting = System.Windows.Forms.SortOrder.Ascending;
             this.listView.TabIndex = 4;
+            this.listView.MultiSelect = false;
             this.listView.UseCompatibleStateImageBehavior = false;
             this.listView.View = System.Windows.Forms.View.Details;
             this.listView.SelectedIndexChanged += new System.EventHandler(this.listView_SelectedIndexChanged);
+            this.listView.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listView_MouseDown);
+            this.listView.DoubleClick += new System.EventHandler(this.listView_DoubleClick);
             // 
             // columnHeader
             // 
@@ -148,9 +165,10 @@
             // 
             this.contextMenuStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.createCQToolStripMenuItem,
+            this.editCQToolStripMenuItem,
             this.dropCQToolStripMenuItem});
             this.contextMenuStrip.Name = "contextMenuStrip";
-            this.contextMenuStrip.Size = new System.Drawing.Size(129, 48);
+            this.contextMenuStrip.Size = new System.Drawing.Size(129, 70);
             // 
             // createCQToolStripMenuItem
             // 
@@ -159,6 +177,15 @@
             this.createCQToolStripMenuItem.Size = new System.Drawing.Size(128, 22);
             this.createCQToolStripMenuItem.Text = "Create CQ";
             this.createCQToolStripMenuItem.Click += new System.EventHandler(this.createCqButton_Click);
+            // 
+            // editCQToolStripMenuItem
+            // 
+            this.editCQToolStripMenuItem.Enabled = false;
+            this.editCQToolStripMenuItem.Image = global::CymaticLabs.InfluxDB.Studio.Properties.Resources.EditUser;
+            this.editCQToolStripMenuItem.Name = "editCQToolStripMenuItem";
+            this.editCQToolStripMenuItem.Size = new System.Drawing.Size(128, 22);
+            this.editCQToolStripMenuItem.Text = "Edit CQ";
+            this.editCQToolStripMenuItem.Click += new System.EventHandler(this.editCqButton_Click);
             // 
             // dropCQToolStripMenuItem
             // 
@@ -201,6 +228,7 @@
 
         private System.Windows.Forms.ToolStrip toolStrip;
         private System.Windows.Forms.ToolStripButton createCqButton;
+        private System.Windows.Forms.ToolStripButton editCqButton;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
         private System.Windows.Forms.ToolStripButton dropCqButton;
         private System.Windows.Forms.SplitContainer splitContainer;
@@ -210,6 +238,7 @@
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip;
         private System.Windows.Forms.ToolStripMenuItem dropCQToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem createCQToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem editCQToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator2;
         private System.Windows.Forms.ToolStripButton backFillButton;
     }

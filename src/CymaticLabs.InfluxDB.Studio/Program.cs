@@ -16,6 +16,7 @@ namespace CymaticLabs.InfluxDB.Studio
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            Localization.ApplySavedCulture();
             Application.Run(new AppForm());
         }
     }

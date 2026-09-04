@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Dialogs
 {
@@ -59,6 +60,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         public GrantPrivilegeDialog()
         {
             InitializeComponent();
+            Localization.Apply(this);
 
             // Setup the privilege drop down with values dynamically
             foreach (InfluxDbPrivileges p in Enum.GetValues(typeof(InfluxDbPrivileges)))
@@ -102,13 +104,15 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
 
             foreach (var db in dbNames)
             {
+                if (InfluxDbHelper.IsInternalDatabase(db)) continue;
                 databaseComboBox.Items.Add(db);
             }
 
             databaseComboBox.EndUpdate();
 
             // Select the first database
-            databaseComboBox.SelectedIndex = 0;
+            if (databaseComboBox.Items.Count > 0)
+                databaseComboBox.SelectedIndex = 0;
         }
 
         #endregion Methods

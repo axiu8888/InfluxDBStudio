@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Dialogs
 {
@@ -62,6 +63,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         public ManageConnectionsDialog()
         {
             InitializeComponent();
+            Localization.Apply(this);
             connectionDialog = new ConnectionDialog();
         }
 
@@ -180,7 +182,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
                 // Get the select list item
                 var li = listView.SelectedItems[0];
 
-                if (MessageBox.Show("Delete connection: " + connection.Name + "?", "Confirm Delete",
+                if (MessageBox.Show(Localization.Format("Delete connection: {0}?", connection.Name), Localization.T("Confirm Delete"),
                         MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.OK)
                 {
                     // Remove from local UI

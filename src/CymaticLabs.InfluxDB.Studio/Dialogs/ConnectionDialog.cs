@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Dialogs
 {
@@ -54,17 +55,6 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         }
 
         /// <summary>
-        /// Gets or sets the name of the single database to connect to for the connection.
-        /// When specifying a single database name database discovery will not occur which
-        /// can be helpful if you don't have sufficient privileges to run those commands.
-        /// </summary>
-        public string Database
-        {
-            get { return database.Text; }
-            set { database.Text = value; }
-        }
-
-        /// <summary>
         /// Gets or sets the connection user name.
         /// </summary>
         public string Username
@@ -98,6 +88,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         public ConnectionDialog()
         {
             InitializeComponent();
+            Localization.Apply(this);
         }
 
         #endregion Constructors
@@ -109,22 +100,9 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         {
             try
             {
-                // Create a new InfluxDB client
                 var client = InfluxDbClientFactory.Create(CreateConnection());
-
-                // Test the connection by requesting a list of databases
-                if (!string.IsNullOrWhiteSpace(client.Connection.Database))
-                {
-                    // If a single database was specified, query the database
-                    var response = await client.GetMeasurementNamesAsync(client.Connection.Database);
-                    MessageBox.Show("Connection Successful!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                else
-                {
-                    // If no single database was specified, query all databases
-                    var response = await client.GetDatabaseNamesAsync();
-                    MessageBox.Show("Connection Successful!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
+                await client.GetDatabaseNamesAsync();
+                MessageBox.Show(Localization.T("Connection Successful!"), Localization.T("Success"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -137,14 +115,11 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         {
             try
             {
-                // Create a new InfluxDB client
                 var client = InfluxDbClientFactory.Create(CreateConnection());
-
-                // Test the connection by pinging the server
                 var response = await client.PingAsync();
-                if (!response.Success) throw new Exception("There was an error connecting to the server.");
-                var message = string.Format("Response Time: {0:0} ms\nInfluxDB Version: {1}", response.ResponseTime.TotalMilliseconds, response.Version);
-                MessageBox.Show(message, "Pong", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (!response.Success) throw new Exception(Localization.T("There was an error connecting to the server."));
+                var message = Localization.Format("Response Time: {0:0} ms\nInfluxDB Version: {1}", response.ResponseTime.TotalMilliseconds, response.Version);
+                MessageBox.Show(message, Localization.T("Pong"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -165,7 +140,6 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             ConnectionName = "New Connection";
             Host = "localhost";
             Port = 8086;
-            Database = null;
             Username = null;
             Password = null;
             UseSsl = false;
@@ -179,12 +153,10 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         {
             if (connection == null) throw new ArgumentNullException("connection");
 
-            // Pass the connection values to the dialog
             ConnectionId = connection.Id;
             ConnectionName = connection.Name;
             Host = connection.Host;
             Port = connection.Port;
-            Database = connection.Database;
             Username = connection.Username;
             Password = connection.Password;
             UseSsl = connection.UseSsl;
@@ -196,8 +168,8 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         /// <returns>An InfluxDB connection.</returns>
         public InfluxDbConnection CreateConnection()
         {
-            return new InfluxDbConnection(Guid.NewGuid().ToString(), ConnectionName, Host, 
-                (ushort)Port, Username, Password, UseSsl, Database);
+            return new InfluxDbConnection(Guid.NewGuid().ToString(), ConnectionName, Host,
+                (ushort)Port, Username, Password, UseSsl);
         }
 
         /// <summary>
@@ -212,7 +184,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             connection.Name = ConnectionName;
             connection.Host = Host;
             connection.Port = (ushort)Port;
-            connection.Database = Database;
+            connection.Database = null;
             connection.Username = Username;
             connection.Password = Password;
             connection.UseSsl = UseSsl;

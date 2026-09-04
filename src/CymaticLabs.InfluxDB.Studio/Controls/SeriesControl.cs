@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -26,6 +27,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public SeriesControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
         }
 
         #endregion Constructors
@@ -43,7 +45,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             var seriesValues = new List<Dictionary<string, string>>();
 
             // First column is just a row number
-            var rowCol = new ColumnHeader() { Text = "#" };
+            var rowCol = new ColumnHeader() { Text = Localization.T("#") };
             columnList.Add(rowCol);
             listView.Columns.Add(rowCol);
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -39,6 +40,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public StatsControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
         }
 
         #endregion Constructors

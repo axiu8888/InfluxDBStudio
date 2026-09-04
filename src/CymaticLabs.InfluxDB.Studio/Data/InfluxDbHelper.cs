@@ -32,6 +32,28 @@ namespace CymaticLabs.InfluxDB.Data
         /// </summary>
         public static readonly Regex IntervalRegex = new Regex("([0-9\\.]+)(.)");
 
+        /// <summary>
+        /// The reserved InfluxDB internal/system database name.
+        /// </summary>
+        public const string InternalDatabaseName = "_internal";
+
+        /// <summary>
+        /// Default LIMIT applied to SELECT queries that do not already specify one.
+        /// </summary>
+        public const int DefaultQueryLimit = 1000;
+
+        /// <summary>
+        /// Default OFFSET applied to SELECT queries that do not already specify one.
+        /// </summary>
+        public const int DefaultQueryOffset = 0;
+
+        static readonly Regex SelectStatementRegex = new Regex(@"^\s*SELECT\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        static readonly Regex LimitClauseRegex = new Regex(@"\bLIMIT\s+\d+\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        static readonly Regex OffsetClauseRegex = new Regex(@"\bOFFSET\s+\d+\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        static readonly Regex IntoClauseRegex = new Regex(@"\bINTO\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        static readonly Regex InsertBeforeLimitRegex = new Regex(@"\b(?:OFFSET|SLIMIT|SOFFSET)\s+\d+\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        static readonly Regex InsertBeforeOffsetRegex = new Regex(@"\b(?:SLIMIT|SOFFSET)\s+\d+\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
         #endregion Fields
 
         #region Properties
@@ -43,6 +65,90 @@ namespace CymaticLabs.InfluxDB.Data
         #endregion Constructors
 
         #region Methods
+
+        /// <summary>
+        /// Returns true if the name is InfluxDB's reserved internal database.
+        /// </summary>
+        public static bool IsInternalDatabase(string name)
+        {
+            return string.Equals(name, InternalDatabaseName, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Ensures SELECT statements include LIMIT and OFFSET so large result sets cannot freeze the UI.
+        /// Statements that already have the clause, use INTO, or are not SELECT are left unchanged.
+        /// </summary>
+        /// <param name="query">The InfluxQL query text.</param>
+        /// <param name="updatedQuery">The query with paging clauses added where needed.</param>
+        /// <param name="addedLimit">True if LIMIT was inserted.</param>
+        /// <param name="addedOffset">True if OFFSET was inserted.</param>
+        /// <param name="limit">The LIMIT to apply when missing. Defaults to <see cref="DefaultQueryLimit"/>.</param>
+        /// <param name="offset">The OFFSET to apply when missing. Defaults to <see cref="DefaultQueryOffset"/>.</param>
+        /// <returns>True if the query was modified.</returns>
+        public static bool TryEnsureSelectQueryPaging(string query, out string updatedQuery,
+            out bool addedLimit, out bool addedOffset,
+            int limit = DefaultQueryLimit, int offset = DefaultQueryOffset)
+        {
+            updatedQuery = query;
+            addedLimit = false;
+            addedOffset = false;
+
+            if (string.IsNullOrWhiteSpace(query) || limit <= 0 || offset < 0) return false;
+
+            var statements = query.Split(';');
+            var changed = false;
+
+            for (var i = 0; i < statements.Length; i++)
+            {
+                var stmt = statements[i];
+                if (!SelectStatementRegex.IsMatch(stmt)) continue;
+                if (IntoClauseRegex.IsMatch(stmt)) continue;
+
+                if (!LimitClauseRegex.IsMatch(stmt))
+                {
+                    stmt = InsertClause(stmt, " LIMIT " + limit, InsertBeforeLimitRegex);
+                    addedLimit = true;
+                    changed = true;
+                }
+
+                if (!OffsetClauseRegex.IsMatch(stmt))
+                {
+                    var limitMatch = LimitClauseRegex.Match(stmt);
+                    if (limitMatch.Success)
+                    {
+                        var insertAt = limitMatch.Index + limitMatch.Length;
+                        stmt = stmt.Substring(0, insertAt) + " OFFSET " + offset + stmt.Substring(insertAt);
+                    }
+                    else
+                    {
+                        stmt = InsertClause(stmt, " OFFSET " + offset, InsertBeforeOffsetRegex);
+                    }
+
+                    addedOffset = true;
+                    changed = true;
+                }
+
+                statements[i] = stmt;
+            }
+
+            if (!changed) return false;
+
+            updatedQuery = string.Join(";", statements);
+            return true;
+        }
+
+        static string InsertClause(string statement, string clause, Regex insertBefore)
+        {
+            var match = insertBefore.Match(statement);
+            if (match.Success)
+            {
+                return statement.Substring(0, match.Index).TrimEnd()
+                    + clause + " "
+                    + statement.Substring(match.Index);
+            }
+
+            return statement.TrimEnd() + clause;
+        }
 
         /// <summary>
         /// Determine whether or not an InfluxDB time interval string is valid:

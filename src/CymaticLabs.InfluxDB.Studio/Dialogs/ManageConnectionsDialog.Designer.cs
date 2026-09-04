@@ -105,7 +105,7 @@
             this.buttonsPanel.Controls.Add(this.connectButton);
             this.buttonsPanel.Controls.Add(this.cancelButton);
             this.buttonsPanel.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.buttonsPanel.Location = new System.Drawing.Point(0, 228);
+            this.buttonsPanel.Location = new System.Drawing.Point(0, 442);
             this.buttonsPanel.Name = "buttonsPanel";
             this.buttonsPanel.Size = new System.Drawing.Size(496, 38);
             this.buttonsPanel.TabIndex = 1;
@@ -162,7 +162,7 @@
             this.listView.LargeImageList = this.imageList;
             this.listView.Location = new System.Drawing.Point(0, 25);
             this.listView.Name = "listView";
-            this.listView.Size = new System.Drawing.Size(496, 203);
+            this.listView.Size = new System.Drawing.Size(496, 417);
             this.listView.SmallImageList = this.imageList;
             this.listView.Sorting = System.Windows.Forms.SortOrder.Ascending;
             this.listView.TabIndex = 2;
@@ -175,13 +175,13 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(496, 266);
+            this.ClientSize = new System.Drawing.Size(496, 480);
             this.Controls.Add(this.listView);
             this.Controls.Add(this.buttonsPanel);
             this.Controls.Add(this.toolStrip);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.SizableToolWindow;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.MinimumSize = new System.Drawing.Size(512, 300);
+            this.MinimumSize = new System.Drawing.Size(512, 420);
             this.Name = "ManageConnectionsDialog";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
             this.Text = "Manage InfluxDB Connections";

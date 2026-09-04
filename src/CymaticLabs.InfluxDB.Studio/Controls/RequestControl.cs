@@ -1,6 +1,7 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -38,6 +39,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public RequestControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
         }
 
         #endregion Constructors

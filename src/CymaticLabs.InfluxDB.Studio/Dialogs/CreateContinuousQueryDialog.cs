@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ScintillaNET;
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Dialogs
 {
@@ -45,6 +47,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         public CreateContinuousQueryDialog()
         {
             InitializeComponent();
+            Localization.Apply(this);
 
             // Populate fill type drop down
             foreach (var fillType in Enum.GetValues(typeof(InfluxDbFillTypes)))
@@ -68,14 +71,14 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         private void CreateContinuousQueryDialog_Load(object sender, EventArgs e)
         {
             // Setup help/info tool tips
-            destinationToolTip.SetToolTip(destinationInfo, Properties.Resources.CQ_Destination_Info);
-            sourceToolTip.SetToolTip(sourceInfo, Properties.Resources.CQ_Source_Info);
-            intervalToolTip.SetToolTip(intervalInfo, Properties.Resources.CQ_Interval_Info);
-            fillTypeToolTip.SetToolTip(fillTypeInfo, Properties.Resources.CQ_FillType_Info);
-            tagsToolTip.SetToolTip(tagsInfo, Properties.Resources.CQ_Tags_Info);
-            resampleToolTip.SetToolTip(resampleInfo, Properties.Resources.CQ_Resample_Info);
-            resampleEveryToolTip.SetToolTip(resampleEveryInfo, Properties.Resources.CQ_ResampleEvery_Info);
-            resampleForToolTip.SetToolTip(resampleForInfo, Properties.Resources.CQ_ResampleFor_Info);
+            destinationToolTip.SetToolTip(destinationInfo, Localization.T(Properties.Resources.CQ_Destination_Info));
+            sourceToolTip.SetToolTip(sourceInfo, Localization.T(Properties.Resources.CQ_Source_Info));
+            intervalToolTip.SetToolTip(intervalInfo, Localization.T(Properties.Resources.CQ_Interval_Info));
+            fillTypeToolTip.SetToolTip(fillTypeInfo, Localization.T(Properties.Resources.CQ_FillType_Info));
+            tagsToolTip.SetToolTip(tagsInfo, Localization.T(Properties.Resources.CQ_Tags_Info));
+            resampleToolTip.SetToolTip(resampleInfo, Localization.T(Properties.Resources.CQ_Resample_Info));
+            resampleEveryToolTip.SetToolTip(resampleEveryInfo, Localization.T(Properties.Resources.CQ_ResampleEvery_Info));
+            resampleForToolTip.SetToolTip(resampleForInfo, Localization.T(Properties.Resources.CQ_ResampleFor_Info));
         }
 
         // Handle add new subquery button
@@ -120,7 +123,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         // Adds a new query tab
         public void NewQuery()
         {
-            queryEditor.Text = QueryEditorPlaceholderText;
+            queryEditor.Text = Localization.T(QueryEditorPlaceholderText);
         }
 
         #endregion Commands
@@ -153,6 +156,208 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
 
             // Clear query
             NewQuery();
+
+            ConfigureAsCreate();
+        }
+
+        /// <summary>
+        /// Switches the dialog to create mode.
+        /// </summary>
+        public void ConfigureAsCreate()
+        {
+            Text = Localization.T("Create Continuous Query");
+            createButton.Text = Localization.T("Create");
+        }
+
+        /// <summary>
+        /// Switches the dialog to edit mode.
+        /// </summary>
+        public void ConfigureAsEdit()
+        {
+            Text = Localization.T("Edit Continuous Query");
+            createButton.Text = Localization.T("Save");
+        }
+
+        /// <summary>
+        /// Populates the form from an existing continuous query definition.
+        /// </summary>
+        public bool LoadFromQuery(string cqName, string query)
+        {
+            InfluxDbCqParams parsed;
+            if (!TryParseContinuousQuery(cqName, query, out parsed))
+                return false;
+
+            nameTextBox.Text = parsed.Name;
+            SetComboValue(destinationComboBox, parsed.Destination);
+            SetComboValue(sourceComboBox, parsed.Source);
+            intervalTextBox.Text = parsed.Interval;
+
+            string subquery = null;
+            if (parsed.SubQueries != null)
+            {
+                foreach (var item in parsed.SubQueries)
+                {
+                    subquery = item;
+                    break;
+                }
+            }
+            queryEditor.Text = subquery;
+
+            if (parsed.Tags != null)
+            {
+                var tagList = new List<string>(parsed.Tags);
+                tagsTextBox.Text = string.Join(", ", tagList.ToArray());
+            }
+
+            fillTypeComboBox.SelectedItem = parsed.FillType;
+
+            var hasResample = !string.IsNullOrWhiteSpace(parsed.ResampleEveryInterval)
+                || !string.IsNullOrWhiteSpace(parsed.ResampleForInterval);
+            resampleCheckBox.Checked = hasResample;
+            resampleEveryTextBox.Text = parsed.ResampleEveryInterval;
+            resampleForTextBox.Text = parsed.ResampleForInterval;
+            return true;
+        }
+
+        static void SetComboValue(ComboBox combo, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                combo.SelectedItem = null;
+                combo.Text = null;
+                return;
+            }
+
+            foreach (var item in combo.Items)
+            {
+                if (string.Equals(item as string, value, StringComparison.OrdinalIgnoreCase))
+                {
+                    combo.SelectedItem = item;
+                    return;
+                }
+            }
+
+            combo.SelectedItem = null;
+            combo.Text = value;
+        }
+
+        static bool TryParseContinuousQuery(string cqName, string query, out InfluxDbCqParams parsed)
+        {
+            parsed = null;
+            if (string.IsNullOrWhiteSpace(query)) return false;
+
+            var normalized = Regex.Replace(query.Trim().TrimEnd(';'), @"\s+", " ");
+            var headerMatch = Regex.Match(normalized,
+                @"^CREATE\s+CONTINUOUS\s+QUERY\s+(?<name>\S+)\s+ON\s+(?<db>\S+)(?:\s+RESAMPLE(?<resample>.*?))?\s+BEGIN\s+(?<body>.*)\s+END\s*$",
+                RegexOptions.IgnoreCase);
+
+            if (!headerMatch.Success) return false;
+
+            var body = headerMatch.Groups["body"].Value.Trim();
+            var intoIndex = IndexOfKeyword(body, "INTO", 0);
+            var fromIndex = intoIndex >= 0 ? IndexOfKeyword(body, "FROM", intoIndex) : -1;
+            var groupIndex = fromIndex >= 0 ? IndexOfKeyword(body, "GROUP", fromIndex) : -1;
+
+            if (intoIndex < 0 || fromIndex < 0 || groupIndex < 0) return false;
+            if (!body.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)) return false;
+
+            var select = body.Substring(6, intoIndex - 6).Trim();
+            var destination = UnquoteIdent(body.Substring(intoIndex + 4, fromIndex - (intoIndex + 4)).Trim());
+            var fromAndMaybeWhere = body.Substring(fromIndex + 4, groupIndex - (fromIndex + 4)).Trim();
+
+            var whereIndex = IndexOfKeyword(fromAndMaybeWhere, "WHERE", 0);
+            var source = UnquoteIdent(whereIndex >= 0 ? fromAndMaybeWhere.Substring(0, whereIndex).Trim() : fromAndMaybeWhere);
+
+            var groupBy = body.Substring(groupIndex).Trim();
+            var timeMatch = Regex.Match(groupBy, @"GROUP\s+BY\s+time\((?<interval>[^)]+)\)(?<rest>.*)$", RegexOptions.IgnoreCase);
+            if (!timeMatch.Success) return false;
+
+            var interval = timeMatch.Groups["interval"].Value.Trim();
+            var rest = timeMatch.Groups["rest"].Value.Trim();
+            var fillType = InfluxDbFillTypes.Null;
+            var tags = new List<string>();
+
+            var fillMatch = Regex.Match(rest, @"\bfill\((?<fill>[^)]+)\)\s*$", RegexOptions.IgnoreCase);
+            if (fillMatch.Success)
+            {
+                var fillName = fillMatch.Groups["fill"].Value.Trim();
+                InfluxDbFillTypes parsedFill;
+                if (Enum.TryParse(fillName, true, out parsedFill))
+                    fillType = parsedFill;
+                rest = rest.Substring(0, fillMatch.Index).Trim().Trim(',');
+            }
+            else
+            {
+                rest = rest.Trim().Trim(',');
+            }
+
+            if (!string.IsNullOrWhiteSpace(rest))
+            {
+                foreach (var tag in rest.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var cleaned = UnquoteIdent(tag);
+                    if (!string.IsNullOrWhiteSpace(cleaned))
+                        tags.Add(cleaned);
+                }
+            }
+
+            string resampleEvery = null;
+            string resampleFor = null;
+            var resample = headerMatch.Groups["resample"].Value;
+            if (!string.IsNullOrWhiteSpace(resample))
+            {
+                var everyMatch = Regex.Match(resample, @"EVERY\s+(\S+)", RegexOptions.IgnoreCase);
+                if (everyMatch.Success) resampleEvery = everyMatch.Groups[1].Value.Trim();
+
+                var forMatch = Regex.Match(resample, @"FOR\s+(\S+)", RegexOptions.IgnoreCase);
+                if (forMatch.Success) resampleFor = forMatch.Groups[1].Value.Trim();
+            }
+
+            parsed = new InfluxDbCqParams
+            {
+                Name = string.IsNullOrWhiteSpace(cqName) ? UnquoteIdent(headerMatch.Groups["name"].Value) : cqName,
+                Database = UnquoteIdent(headerMatch.Groups["db"].Value),
+                SubQueries = new List<string> { select },
+                Destination = destination,
+                Source = source,
+                Interval = interval,
+                FillType = fillType,
+                Tags = tags.Count > 0 ? tags : null,
+                ResampleEveryInterval = resampleEvery,
+                ResampleForInterval = resampleFor
+            };
+
+            return !string.IsNullOrWhiteSpace(parsed.Name)
+                && !string.IsNullOrWhiteSpace(parsed.Destination)
+                && !string.IsNullOrWhiteSpace(parsed.Source)
+                && !string.IsNullOrWhiteSpace(parsed.Interval)
+                && !string.IsNullOrWhiteSpace(select);
+        }
+
+        static int IndexOfKeyword(string text, string keyword, int start)
+        {
+            if (string.IsNullOrEmpty(text) || start < 0 || start >= text.Length) return -1;
+            var match = Regex.Match(text.Substring(start), @"\b" + Regex.Escape(keyword) + @"\b", RegexOptions.IgnoreCase);
+            return match.Success ? start + match.Index : -1;
+        }
+
+        static string UnquoteIdent(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return value;
+            value = value.Trim();
+            var parts = value.Split('.');
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var part = parts[i].Trim();
+                if (part.Length >= 2 &&
+                    ((part[0] == '"' && part[part.Length - 1] == '"') ||
+                     (part[0] == '\'' && part[part.Length - 1] == '\'')))
+                {
+                    part = part.Substring(1, part.Length - 2);
+                }
+                parts[i] = part;
+            }
+            return string.Join(".", parts);
         }
 
         #endregion User Interface
@@ -228,7 +433,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
 
                 if (destination == source)
                 {
-                    if (MessageBox.Show("Source is the same as the Destination. These are typically different values for a Continous Query. Are you sure that you want to have duplicate values?", "Confirm",
+                    if (MessageBox.Show(Localization.T("Source is the same as the Destination. These are typically different values for a Continous Query. Are you sure that you want to have duplicate values?"), Localization.T("Confirm"),
                         MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.No)
                     {
                         return false;
@@ -287,7 +492,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
                 }
 
                 // Subquery
-                if (queryEditor.Text == null || queryEditor.Text.Length == 0 || queryEditor.Text == QueryEditorPlaceholderText)
+                if (queryEditor.Text == null || queryEditor.Text.Length == 0 || queryEditor.Text == Localization.T(QueryEditorPlaceholderText))
                 {
                     AppForm.DisplayError("SubQuery cannot be blank.");
                     return false;

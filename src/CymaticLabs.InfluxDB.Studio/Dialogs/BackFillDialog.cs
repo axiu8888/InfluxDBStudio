@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ScintillaNET;
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Dialogs
 {
@@ -45,6 +46,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         public BackfillDialog()
         {
             InitializeComponent();
+            Localization.Apply(this);
 
             // Populate fill type drop down
             foreach (var fillType in Enum.GetValues(typeof(InfluxDbFillTypes)))
@@ -69,12 +71,12 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         private void BackFillDialog_Load(object sender, EventArgs e)
         {
             // Setup help/info tool tips
-            destinationToolTip.SetToolTip(destinationInfo, Properties.Resources.BF_Destination_Info);
-            sourceToolTip.SetToolTip(sourceInfo, Properties.Resources.BF_Source_Info);
-            intervalToolTip.SetToolTip(intervalInfo, Properties.Resources.BF_Interval_Info);
-            fillTypeToolTip.SetToolTip(fillTypeInfo, Properties.Resources.CQ_FillType_Info);
-            filtersToolTip.SetToolTip(filtersInfo, Properties.Resources.BF_Filters_Info);
-            tagsToolTip.SetToolTip(tagsInfo, Properties.Resources.CQ_Tags_Info);
+            destinationToolTip.SetToolTip(destinationInfo, Localization.T(Properties.Resources.BF_Destination_Info));
+            sourceToolTip.SetToolTip(sourceInfo, Localization.T(Properties.Resources.BF_Source_Info));
+            intervalToolTip.SetToolTip(intervalInfo, Localization.T(Properties.Resources.BF_Interval_Info));
+            fillTypeToolTip.SetToolTip(fillTypeInfo, Localization.T(Properties.Resources.CQ_FillType_Info));
+            filtersToolTip.SetToolTip(filtersInfo, Localization.T(Properties.Resources.BF_Filters_Info));
+            tagsToolTip.SetToolTip(tagsInfo, Localization.T(Properties.Resources.CQ_Tags_Info));
         }
 
         // Form Closing
@@ -106,7 +108,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         // Adds a new query tab
         public void NewQuery()
         {
-            queryEditor.Text = QueryEditorPlaceholderText;
+            queryEditor.Text = Localization.T(QueryEditorPlaceholderText);
         }
 
         #endregion Commands
@@ -131,7 +133,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             tagsTextBox.Text = null;
 
             // Reset time/date format
-            var dateTimeFormat = string.Format("{0} @ {1}", AppForm.Settings.DateFormat, AppForm.Settings.TimeFormat);
+            var dateTimeFormat = AppForm.Settings.DateTimePickerFormat;
             fromDateTimePicker.CustomFormat = dateTimeFormat;
             toDateTimePicker.CustomFormat = dateTimeFormat;
 
@@ -205,7 +207,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
 
                 if (destination == source)
                 {
-                    if (MessageBox.Show("Source is the same as the Destination. These are typically different values for a Backfill Query. Are you sure that you want to have duplicate values?", "Confirm",
+                    if (MessageBox.Show(Localization.T("Source is the same as the Destination. These are typically different values for a Backfill Query. Are you sure that you want to have duplicate values?"), Localization.T("Confirm"),
                         MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.No)
                     {
                         return false;
@@ -240,7 +242,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
                 }
 
                 // Subquery
-                if (queryEditor.Text == null || queryEditor.Text.Length == 0 || queryEditor.Text == QueryEditorPlaceholderText)
+                if (queryEditor.Text == null || queryEditor.Text.Length == 0 || queryEditor.Text == Localization.T(QueryEditorPlaceholderText))
                 {
                     AppForm.DisplayError("SubQuery cannot be blank.");
                     return false;

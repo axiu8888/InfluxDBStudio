@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Windows.Forms;
 using CymaticLabs.InfluxDB.Data;
 using CymaticLabs.InfluxDB.Studio.Dialogs;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -42,6 +43,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public RetentionPolicyControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
             policyDialog = new RetentionPolicyDialog();
         }
 
@@ -219,7 +221,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 var wasDefault = policy.Default;
 
                 // Confirm the drop
-                if (DialogResult.OK == MessageBox.Show(string.Format("Drop retention policy: {0}?", policy.Name), "Confirm Drop", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning))
+                if (DialogResult.OK == MessageBox.Show(Localization.Format("Drop retention policy: {0}?", policy.Name), Localization.T("Confirm Drop"), MessageBoxButtons.OKCancel, MessageBoxIcon.Warning))
                 {
                     var response = await InfluxDbClient.DropRetentionPolicyAsync(SelectedDatabase, policy.Name);
 
@@ -281,41 +283,15 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             if (InfluxDbClient == null) throw new Exception("No InfluxDB client available.");
 
-            // Clear current
             listView.Items.Clear();
-            databaseComboBox.Items.Clear();
+            databaseComboBox.Visible = false;
+            toolStripSeparator1.Visible = false;
 
-            // If this connection specifies just one database, use it
-            if (!string.IsNullOrWhiteSpace(InfluxDbClient.Connection.Database))
-            {
-                databaseComboBox.Items.Add(InfluxDbClient.Connection.Database);
-            }
-            // Otherwise load the current list
-            else
-            {
-                var databaseNames = await InfluxDbClient.GetDatabaseNamesAsync();
-                foreach (var dbName in databaseNames) databaseComboBox.Items.Add(dbName);
-            }
+            SelectedDatabase = Database;
+            if (string.IsNullOrWhiteSpace(SelectedDatabase)) return;
 
-            // Select default database
-            if (SelectedDatabase == null)
-            {
-                databaseComboBox.SelectedIndex = 0;
-                SelectedDatabase = databaseComboBox.Items[databaseComboBox.SelectedIndex].ToString();
-            }
-            else
-            {
-                for (var i = 0; i < databaseComboBox.Items.Count; i++)
-                {
-                    var database = databaseComboBox.Items[i].ToString();
-
-                    if (database == SelectedDatabase)
-                    {
-                        databaseComboBox.SelectedIndex = i;
-                        break;
-                    }
-                }
-            }
+            selectDbLabel.Text = Localization.T("Database:") + " " + SelectedDatabase;
+            await BindSelectedPolicy();
         }
 
         // Binds retention policies for the current database

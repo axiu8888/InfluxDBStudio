@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using ScintillaNET;
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -32,6 +33,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public RunningQueriesControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
 
             // Set query editor styles, InfluxDB is SQL like, so use those
             queryEditor.Styles[Style.Sql.Identifier].ForeColor = Color.Blue;

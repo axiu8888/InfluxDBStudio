@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Threading.Tasks;
@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using ScintillaNET;
 using CymaticLabs.InfluxDB.Data;
 using CymaticLabs.InfluxDB.Studio.Dialogs;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -35,6 +36,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public ContinuousQueryControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
 
             createCqDialog = new CreateContinuousQueryDialog();
 
@@ -57,6 +59,12 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             await CreateContinuousQuery();
         }
 
+        // Handles editing a CQ
+        private async void editCqButton_Click(object sender, EventArgs e)
+        {
+            await EditContinuousQuery();
+        }
+
         // Handles dropping a CQ
         private async void dropCqButton_Click(object sender, EventArgs e)
         {
@@ -67,6 +75,29 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         private async void backFillButton_Click(object sender, EventArgs e)
         {
             await RunBackFill();
+        }
+
+        // Select the list item under the cursor so right-click edit/drop targets it
+        private void listView_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right) return;
+
+            var hit = listView.HitTest(e.Location);
+            if (hit.Item == null) return;
+
+            if (!hit.Item.Selected)
+            {
+                listView.SelectedItems.Clear();
+                hit.Item.Selected = true;
+            }
+
+            hit.Item.Focused = true;
+        }
+
+        // Double-click a CQ to edit it
+        private async void listView_DoubleClick(object sender, EventArgs e)
+        {
+            await EditContinuousQuery();
         }
 
         // Handles selection of CQ in list view
@@ -146,6 +177,86 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             }
         }
 
+        // Edit the selected Continuous Query
+        async Task EditContinuousQuery()
+        {
+            try
+            {
+                if (SelectedCq == null || Database == null) return;
+
+                createCqDialog.ResetCqForm();
+                createCqDialog.InfluxDbClient = InfluxDbClient;
+                createCqDialog.Database = Database;
+                createCqDialog.ConfigureAsEdit();
+
+                await createCqDialog.BindInfluxDataSources();
+
+                if (!createCqDialog.LoadFromQuery(SelectedCq.Name, SelectedCq.Query))
+                {
+                    AppForm.DisplayError(Localization.T("Unable to parse this continuous query for editing."));
+                    return;
+                }
+
+                if (createCqDialog.ShowDialog() != DialogResult.OK)
+                    return;
+
+                var cqParams = createCqDialog.CqResult;
+                var originalName = SelectedCq.Name;
+                var originalQuery = SelectedCq.Query;
+                var renamed = !string.Equals(originalName, cqParams.Name, StringComparison.Ordinal);
+
+                if (renamed)
+                {
+                    var createResponse = await InfluxDbClient.CreateContinuousQueryAsync(cqParams);
+                    if (!createResponse.Success)
+                    {
+                        AppForm.DisplayError(createResponse.Body);
+                        return;
+                    }
+
+                    var dropResponse = await InfluxDbClient.DropContinuousQueryAsync(Database, originalName);
+                    if (!dropResponse.Success)
+                    {
+                        AppForm.DisplayError(Localization.Format(
+                            "The updated continuous query was created, but the original could not be dropped: {0}",
+                            dropResponse.Body));
+                    }
+                }
+                else
+                {
+                    var dropResponse = await InfluxDbClient.DropContinuousQueryAsync(Database, originalName);
+                    if (!dropResponse.Success)
+                    {
+                        AppForm.DisplayError(dropResponse.Body);
+                        return;
+                    }
+
+                    var createResponse = await InfluxDbClient.CreateContinuousQueryAsync(cqParams);
+                    if (!createResponse.Success)
+                    {
+                        try
+                        {
+                            await InfluxDbClient.QueryAsync(Database, originalQuery);
+                        }
+                        catch
+                        {
+                        }
+
+                        AppForm.DisplayError(createResponse.Body);
+                        return;
+                    }
+                }
+
+                SelectedCq = null;
+                await ExecuteRequestAsync();
+                UpdateUIState();
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
         // Drops a Continuous Query
         async Task DropContinuousQuery()
         {
@@ -154,7 +265,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 if (SelectedCq == null || Database == null) return;
 
                 // Confirm Drop
-                if (MessageBox.Show(string.Format("Drop CQ: {0}?", SelectedCq.Name), "Confirm Drop", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning)
+                if (MessageBox.Show(Localization.Format("Drop CQ: {0}?", SelectedCq.Name), Localization.T("Confirm Drop"), MessageBoxButtons.OKCancel, MessageBoxIcon.Warning)
                     == DialogResult.OK)
                 {
                     var response = await InfluxDbClient.DropContinuousQueryAsync(Database, SelectedCq.Name);
@@ -191,8 +302,11 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         // Updates the UI state
         void UpdateUIState()
         {
-            dropCqButton.Enabled = listView.SelectedItems.Count == 1;
-            dropCQToolStripMenuItem.Enabled = dropCqButton.Enabled;
+            var hasSelection = listView.SelectedItems.Count == 1;
+            editCqButton.Enabled = hasSelection;
+            editCQToolStripMenuItem.Enabled = hasSelection;
+            dropCqButton.Enabled = hasSelection;
+            dropCQToolStripMenuItem.Enabled = hasSelection;
         }
 
         #endregion User Interface

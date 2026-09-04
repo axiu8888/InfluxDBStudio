@@ -16,3 +16,5 @@ packages/*
 .vs/config/applicationhost.config
 src/*.Testing/*.xml
 ImagesRaw/
+dist/
+tools/nuget.exe

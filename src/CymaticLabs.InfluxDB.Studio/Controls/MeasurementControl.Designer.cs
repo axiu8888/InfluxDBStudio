@@ -33,8 +33,10 @@
             this.contextMenuStrip = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.exportAllToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportAllCsvToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.exportAllExcelToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportSelectedToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportSelectedCsvToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.exportSelectedExcelToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.saveFileDialog = new System.Windows.Forms.SaveFileDialog();
             this.exportAllJsonMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportSelectedJsonMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -67,6 +69,7 @@
             // 
             this.exportAllToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.exportAllCsvToolStripMenuItem,
+            this.exportAllExcelToolStripMenuItem,
             this.exportAllJsonMenuItem});
             this.exportAllToolStripMenuItem.Name = "exportAllToolStripMenuItem";
             this.exportAllToolStripMenuItem.Size = new System.Drawing.Size(154, 22);
@@ -79,10 +82,18 @@
             this.exportAllCsvToolStripMenuItem.Text = "CSV";
             this.exportAllCsvToolStripMenuItem.Click += new System.EventHandler(this.exportAllCsvToolStripMenuItem_Click);
             // 
+            // exportAllExcelToolStripMenuItem
+            // 
+            this.exportAllExcelToolStripMenuItem.Name = "exportAllExcelToolStripMenuItem";
+            this.exportAllExcelToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
+            this.exportAllExcelToolStripMenuItem.Text = "Excel";
+            this.exportAllExcelToolStripMenuItem.Click += new System.EventHandler(this.exportAllExcelToolStripMenuItem_Click);
+            // 
             // exportSelectedToolStripMenuItem
             // 
             this.exportSelectedToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.exportSelectedCsvToolStripMenuItem,
+            this.exportSelectedExcelToolStripMenuItem,
             this.exportSelectedJsonMenuItem});
             this.exportSelectedToolStripMenuItem.Name = "exportSelectedToolStripMenuItem";
             this.exportSelectedToolStripMenuItem.Size = new System.Drawing.Size(154, 22);
@@ -94,6 +105,13 @@
             this.exportSelectedCsvToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
             this.exportSelectedCsvToolStripMenuItem.Text = "CSV";
             this.exportSelectedCsvToolStripMenuItem.Click += new System.EventHandler(this.exportSelectedCsvToolStripMenuItem_Click);
+            // 
+            // exportSelectedExcelToolStripMenuItem
+            // 
+            this.exportSelectedExcelToolStripMenuItem.Name = "exportSelectedExcelToolStripMenuItem";
+            this.exportSelectedExcelToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
+            this.exportSelectedExcelToolStripMenuItem.Text = "Excel";
+            this.exportSelectedExcelToolStripMenuItem.Click += new System.EventHandler(this.exportSelectedExcelToolStripMenuItem_Click);
             // 
             // exportAllJsonMenuItem
             // 
@@ -124,8 +142,10 @@
         #endregion
         private System.Windows.Forms.ToolStripMenuItem exportAllToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exportAllCsvToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem exportAllExcelToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exportSelectedToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exportSelectedCsvToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem exportSelectedExcelToolStripMenuItem;
         protected System.Windows.Forms.SaveFileDialog saveFileDialog;
         protected System.Windows.Forms.ContextMenuStrip contextMenuStrip;
         protected System.Windows.Forms.ListView listView;

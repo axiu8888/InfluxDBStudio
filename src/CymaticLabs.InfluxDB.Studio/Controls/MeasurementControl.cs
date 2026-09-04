@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
 using Newtonsoft.Json;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -36,6 +37,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public MeasurementControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
         }
 
         #endregion Constructors
@@ -48,6 +50,12 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             await ExportToCsv();
         }
 
+        // Export All -> Excel
+        protected void exportAllExcelToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            ExportToExcel();
+        }
+
         // Export All -> JSON
         protected void exportAllJsonMenuItem_Click(object sender, EventArgs e)
         {
@@ -58,6 +66,12 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         protected async void exportSelectedCsvToolStripMenuItem_Click(object sender, EventArgs e)
         {
             await ExportToCsv(true);
+        }
+
+        // Export Selected -> Excel
+        protected void exportSelectedExcelToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            ExportToExcel(true);
         }
 
         // Export Selected -> JSON
@@ -75,7 +89,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             // Configure save dialog and open
             saveFileDialog.FileName = string.Format("{0}_{1}.csv", Measurement, ExportFileNameStem);
-            saveFileDialog.Filter = "CSV files|*.csv|All files|*.*";
+            saveFileDialog.Filter = Localization.T("CSV files|*.csv|All files|*.*");
 
             if (saveFileDialog.ShowDialog() == DialogResult.OK)
             {
@@ -116,6 +130,40 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             }
         }
 
+        // Exports series data to Excel
+        protected virtual void ExportToExcel(bool onlySelected = false)
+        {
+            try
+            {
+                saveFileDialog.FileName = string.Format("{0}_{1}.xlsx", Measurement, ExportFileNameStem);
+                saveFileDialog.Filter = Localization.T("Excel files|*.xlsx|All files|*.*");
+
+                if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
+
+                var headers = new List<string>();
+                for (var i = 1; i < listView.Columns.Count; i++)
+                    headers.Add(listView.Columns[i].Text);
+
+                var rows = new List<IList<string>>();
+                foreach (ListViewItem li in listView.Items)
+                {
+                    if (onlySelected && !li.Selected) continue;
+
+                    var row = new List<string>();
+                    for (var i = 1; i < li.SubItems.Count; i++)
+                        row.Add(li.SubItems[i].Text);
+                    rows.Add(row);
+                }
+
+                var sheetName = string.IsNullOrWhiteSpace(ExportFileNameStem) ? Localization.T("Results") : ExportFileNameStem;
+                ExcelExport.WriteXlsx(saveFileDialog.FileName, sheetName, headers, rows);
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
         // Exports series data to a JSON array
         protected virtual void ExportToJson(bool onlySelected = false)
         {
@@ -123,7 +171,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             {
                 // Configure save dialog and open
                 saveFileDialog.FileName = string.Format("{0}_{1}.json", Measurement, ExportFileNameStem);
-                saveFileDialog.Filter = "JSON files|*.json|All files|*.*";
+                saveFileDialog.Filter = Localization.T("JSON files|*.json|All files|*.*");
 
                 if (saveFileDialog.ShowDialog() == DialogResult.OK)
                 {

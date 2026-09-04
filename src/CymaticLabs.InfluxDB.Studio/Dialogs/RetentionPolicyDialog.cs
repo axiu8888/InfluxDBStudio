@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 using CymaticLabs.InfluxDB.Data;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Dialogs
 {
@@ -61,7 +62,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             {
                 isCreating = value;
                 nameTextBox.ReadOnly = !isCreating;
-                createButton.Text = isCreating ? "Create" : "Update";
+                createButton.Text = isCreating ? Localization.T("Create") : Localization.T("Update");
             }
         }
 
@@ -72,6 +73,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         public RetentionPolicyDialog()
         {
             InitializeComponent();
+            Localization.Apply(this);
         }
 
         #endregion Constructors
@@ -82,7 +84,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         private void CreateRetentionPolicyDialog_Load(object sender, EventArgs e)
         {
             // Setup help/info tool tips
-            durationToolTip.SetToolTip(durationInfo, Properties.Resources.RP_Duration_Info);
+            durationToolTip.SetToolTip(durationInfo, Localization.T(Properties.Resources.RP_Duration_Info));
         }
 
         // Handle form closing

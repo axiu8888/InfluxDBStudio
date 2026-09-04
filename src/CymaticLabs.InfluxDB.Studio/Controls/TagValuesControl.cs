@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
@@ -28,6 +29,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public TagValuesControl()
         {
             InitializeComponent();
+            Localization.Apply(this);
         }
 
         #endregion Constructors
@@ -78,10 +80,10 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 var tagValues = await InfluxDbClient.GetTagValuesAsync(Database, Measurement, selectedTag);
 
                 // Add default row count column
-                listView.Columns.Add(new ColumnHeader() { Text = "#" });
+                listView.Columns.Add(new ColumnHeader() { Text = Localization.T("#") });
 
                 // Add tag value column
-                listView.Columns.Add(new ColumnHeader() { Text = "tagValue" });
+                listView.Columns.Add(new ColumnHeader() { Text = Localization.T("tagValue") });
 
                 // Add each value to the list
                 var rowCount = 0;

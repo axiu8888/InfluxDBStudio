@@ -1,4 +1,5 @@
-﻿using System.Windows.Forms;
+using System.Windows.Forms;
+using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Dialogs
 {
@@ -38,6 +39,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         public CreateDatabaseDialog()
         {
             InitializeComponent();
+            Localization.Apply(this);
         }
 
         #endregion Constructors
