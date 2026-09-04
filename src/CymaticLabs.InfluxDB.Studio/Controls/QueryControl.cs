@@ -234,9 +234,23 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             HideSavedQueryToolTip();
 
             savedQueryToolTipOwner = dropDown;
-            // Show to the right of the hovered item so it does not cover the menu text.
-            var x = item.Bounds.Right + 6;
-            var y = item.Bounds.Top;
+
+            // Prefer below the item; if not enough screen space, show above.
+            var lineCount = 1;
+            for (var i = 0; i < sql.Length; i++)
+            {
+                if (sql[i] == '\n') lineCount++;
+            }
+            var estimatedHeight = Math.Min(420, 24 + lineCount * 16);
+            var x = item.Bounds.Left;
+            var belowY = item.Bounds.Bottom + 4;
+            var screenBottom = dropDown.PointToScreen(new Point(x, belowY + estimatedHeight));
+            var workingArea = Screen.FromControl(dropDown).WorkingArea;
+
+            var y = screenBottom.Y <= workingArea.Bottom
+                ? belowY
+                : item.Bounds.Top - estimatedHeight - 4;
+
             savedQueryToolTip.Show(sql, dropDown, x, y);
         }
 
