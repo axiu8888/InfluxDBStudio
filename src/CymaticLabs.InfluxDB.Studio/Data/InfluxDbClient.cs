@@ -254,6 +254,19 @@ namespace CymaticLabs.InfluxDB.Data
         /// <returns>An API response for the write request.</returns>
         public abstract Task<InfluxDbApiResponse> WriteAsync(string database, IEnumerable<InfluxDbPoint> points, string retentionPolicy = null);
 
+        /// <summary>
+        /// Writes raw InfluxDB line protocol text to the specified database.
+        /// </summary>
+        /// <param name="database">The name of the database to write to.</param>
+        /// <param name="lineProtocol">Raw line protocol body (one point per line).</param>
+        /// <param name="precision">Timestamp precision (ns, u, ms, s, m, h). Default ns.</param>
+        /// <param name="retentionPolicy">Optional retention policy.</param>
+        /// <param name="consistency">Optional write consistency (any, one, quorum, all).</param>
+        /// <returns>An API response for the write request.</returns>
+        public abstract Task<InfluxDbApiResponse> WriteLineProtocolAsync(
+            string database, string lineProtocol, string precision = "ns",
+            string retentionPolicy = null, string consistency = null);
+
         #endregion Write
 
         #region Server

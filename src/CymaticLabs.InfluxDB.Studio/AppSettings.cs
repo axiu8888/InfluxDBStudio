@@ -235,13 +235,13 @@ namespace CymaticLabs.InfluxDB.Studio
         }
 
         /// <summary>
-        /// Converts a timestamp value to local time for JSON export so it matches the query list.
+        /// Formats a value for JSON / clipboard export so timestamps match the query list display.
         /// </summary>
         public object ToLocalExportValue(object value)
         {
             DateTime dt;
             if (TryGetDateTime(value, out dt))
-                return ToLocalDisplayTime(dt);
+                return FormatDateTime(dt);
             return value;
         }
 

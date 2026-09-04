@@ -101,6 +101,7 @@
             this.databaseContextMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.databaseRefreshToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.newQueryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.importLineProtocolToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.retentionPoliciesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.viewRetentionPoliciesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.createRetentionPolicyToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -113,6 +114,7 @@
             this.dropDatabaseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.measurementContextMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.newQueryToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+            this.importLineProtocolMeasurementToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.tagKeysToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.tagValuesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.fieldKeysToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -795,12 +797,13 @@
             this.databaseContextMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.databaseRefreshToolStripMenuItem,
             this.newQueryToolStripMenuItem,
+            this.importLineProtocolToolStripMenuItem,
             this.retentionPoliciesToolStripMenuItem,
             this.continousQueriesToolStripMenuItem,
             this.backFillToolStripMenuItem,
             this.dropDatabaseToolStripMenuItem});
             this.databaseContextMenu.Name = "databaseContextMenu";
-            this.databaseContextMenu.Size = new System.Drawing.Size(205, 136);
+            this.databaseContextMenu.Size = new System.Drawing.Size(205, 158);
             // 
             // databaseRefreshToolStripMenuItem
             // 
@@ -817,6 +820,13 @@
             this.newQueryToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
             this.newQueryToolStripMenuItem.Text = "New Query";
             this.newQueryToolStripMenuItem.Click += new System.EventHandler(this.newQueryMenuItem_Click);
+            // 
+            // importLineProtocolToolStripMenuItem
+            // 
+            this.importLineProtocolToolStripMenuItem.Name = "importLineProtocolToolStripMenuItem";
+            this.importLineProtocolToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
+            this.importLineProtocolToolStripMenuItem.Text = "Import Line Protocol...";
+            this.importLineProtocolToolStripMenuItem.Click += new System.EventHandler(this.importLineProtocolToolStripMenuItem_Click);
             // 
             // retentionPoliciesToolStripMenuItem
             // 
@@ -908,6 +918,7 @@
             // 
             this.measurementContextMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.newQueryToolStripMenuItem1,
+            this.importLineProtocolMeasurementToolStripMenuItem,
             this.tagKeysToolStripMenuItem,
             this.tagValuesToolStripMenuItem,
             this.fieldKeysToolStripMenuItem,
@@ -915,7 +926,7 @@
             this.dropMeasurementToolStripMenuItem,
             this.dropSeriesToolStripMenuItem});
             this.measurementContextMenu.Name = "measurementContextMenu";
-            this.measurementContextMenu.Size = new System.Drawing.Size(177, 158);
+            this.measurementContextMenu.Size = new System.Drawing.Size(177, 180);
             // 
             // newQueryToolStripMenuItem1
             // 
@@ -924,6 +935,13 @@
             this.newQueryToolStripMenuItem1.Size = new System.Drawing.Size(176, 22);
             this.newQueryToolStripMenuItem1.Text = "New Query";
             this.newQueryToolStripMenuItem1.Click += new System.EventHandler(this.newQueryMenuItem_Click);
+            // 
+            // importLineProtocolMeasurementToolStripMenuItem
+            // 
+            this.importLineProtocolMeasurementToolStripMenuItem.Name = "importLineProtocolMeasurementToolStripMenuItem";
+            this.importLineProtocolMeasurementToolStripMenuItem.Size = new System.Drawing.Size(176, 22);
+            this.importLineProtocolMeasurementToolStripMenuItem.Text = "Import Line Protocol...";
+            this.importLineProtocolMeasurementToolStripMenuItem.Click += new System.EventHandler(this.importLineProtocolToolStripMenuItem_Click);
             // 
             // tagKeysToolStripMenuItem
             // 
@@ -1062,7 +1080,9 @@
         private System.Windows.Forms.ContextMenuStrip databaseContextMenu;
         private System.Windows.Forms.ToolStripMenuItem databaseRefreshToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem dropDatabaseToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem importLineProtocolToolStripMenuItem;
         private System.Windows.Forms.ContextMenuStrip measurementContextMenu;
+        private System.Windows.Forms.ToolStripMenuItem importLineProtocolMeasurementToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem dropMeasurementToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem dropSeriesToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem queryToolStripMenuItem;

@@ -38,6 +38,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         ToolStripMenuItem addFavoriteMenuItem;
         ToolStripMenuItem favoritesMenuItem;
         ToolStripMenuItem historyMenuItem;
+        ToolTip savedQueryToolTip;
+        ToolStripDropDown savedQueryToolTipOwner;
 
         class MeasurementSchema
         {
@@ -165,6 +167,11 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             addFavoriteMenuItem.Click += addFavoriteMenuItem_Click;
             favoritesMenuItem = new ToolStripMenuItem("Favorites");
             historyMenuItem = new ToolStripMenuItem("Query History");
+            EnsureSavedQueryToolTip();
+            favoritesMenuItem.DropDown.Opening += (s, e) => HideSavedQueryToolTip();
+            favoritesMenuItem.DropDown.Closed += (s, e) => HideSavedQueryToolTip();
+            historyMenuItem.DropDown.Opening += (s, e) => HideSavedQueryToolTip();
+            historyMenuItem.DropDown.Closed += (s, e) => HideSavedQueryToolTip();
 
             var cut = new ToolStripMenuItem("Cut", null, (s, e) => queryEditor.Cut()) { ShortcutKeys = Keys.Control | Keys.X };
             var copy = new ToolStripMenuItem("Copy", null, (s, e) => queryEditor.Copy()) { ShortcutKeys = Keys.Control | Keys.C };
@@ -183,8 +190,10 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             menu.Items.Add(paste);
             menu.Items.Add(selectAll);
 
+            menu.ShowItemToolTips = true;
             menu.Opening += (s, e) =>
             {
+                HideSavedQueryToolTip();
                 var hasText = queryEditor.TextLength > 0;
                 var hasSelection = queryEditor.SelectionStart != queryEditor.SelectionEnd;
                 beautify.Enabled = hasText;
@@ -194,8 +203,53 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 addFavoriteMenuItem.Enabled = !string.IsNullOrWhiteSpace(queryEditor.Text);
                 RebuildSavedQueryMenus();
             };
+            menu.Closed += (s, e) => HideSavedQueryToolTip();
 
             queryEditor.ContextMenuStrip = menu;
+        }
+
+        void EnsureSavedQueryToolTip()
+        {
+            if (savedQueryToolTip != null) return;
+
+            savedQueryToolTip = new ToolTip
+            {
+                AutoPopDelay = 60000,
+                InitialDelay = 400,
+                ReshowDelay = 100,
+                ShowAlways = true,
+                UseFading = false,
+                UseAnimation = false
+            };
+        }
+
+        void ShowSavedQueryToolTip(ToolStripItem item, string sql)
+        {
+            if (item == null || string.IsNullOrWhiteSpace(sql)) return;
+
+            var dropDown = item.Owner as ToolStripDropDown;
+            if (dropDown == null || dropDown.IsDisposed) return;
+
+            EnsureSavedQueryToolTip();
+            HideSavedQueryToolTip();
+
+            savedQueryToolTipOwner = dropDown;
+            // Show to the right of the hovered item so it does not cover the menu text.
+            var x = item.Bounds.Right + 6;
+            var y = item.Bounds.Top;
+            savedQueryToolTip.Show(sql, dropDown, x, y);
+        }
+
+        void HideSavedQueryToolTip()
+        {
+            if (savedQueryToolTip == null) return;
+
+            if (savedQueryToolTipOwner != null && !savedQueryToolTipOwner.IsDisposed)
+                savedQueryToolTip.Hide(savedQueryToolTipOwner);
+            else
+                savedQueryToolTip.RemoveAll();
+
+            savedQueryToolTipOwner = null;
         }
 
         void RebuildSavedQueryMenus()
@@ -206,6 +260,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
 
         void RebuildSavedQueryMenu(ToolStripMenuItem parent, IList<SavedQuery> items, bool history)
         {
+            HideSavedQueryToolTip();
             parent.DropDownItems.Clear();
 
             if (items == null || items.Count == 0)
@@ -217,8 +272,12 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             foreach (var item in items)
             {
                 var entry = item;
+                var sql = entry.Sql ?? string.Empty;
                 var root = new ToolStripMenuItem(QueryLibrary.GetDisplayText(entry, history));
                 root.Click += (s, e) => ApplySavedQuery(entry);
+                root.MouseEnter += (s, e) => ShowSavedQueryToolTip(root, sql);
+                root.MouseLeave += (s, e) => HideSavedQueryToolTip();
+                root.DropDownOpening += (s, e) => HideSavedQueryToolTip();
 
                 var selectItem = new ToolStripMenuItem(Localization.T("Select"));
                 selectItem.Click += (s, e) => ApplySavedQuery(entry);

@@ -118,8 +118,9 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.CancelButton = this.cancelButton;
             this.ClientSize = new System.Drawing.Size(357, 156);
-            this.ControlBox = false;
+            this.ControlBox = true;
             this.Controls.Add(this.grantButton);
             this.Controls.Add(this.cancelButton);
             this.Controls.Add(this.privilegeComboBox);

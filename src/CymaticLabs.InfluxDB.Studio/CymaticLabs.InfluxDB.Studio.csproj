@@ -212,6 +212,9 @@
     <Compile Include="Dialogs\SelectRetentionPolicyDialog.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Dialogs\ImportLineProtocolDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Dialogs\SavedQueryDialog.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -292,6 +295,7 @@
     <Compile Include="Controls\InfluxQlAutoComplete.cs" />
     <Compile Include="Controls\InfluxQlFormatter.cs" />
     <Compile Include="Controls\ExcelExport.cs" />
+    <Compile Include="Controls\LineProtocolExport.cs" />
     <Compile Include="Controls\QueryResultsControl.cs">
       <SubType>UserControl</SubType>
     </Compile>

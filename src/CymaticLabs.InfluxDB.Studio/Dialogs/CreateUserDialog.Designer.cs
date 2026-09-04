@@ -114,8 +114,9 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.CancelButton = this.cancelButton;
             this.ClientSize = new System.Drawing.Size(348, 135);
-            this.ControlBox = false;
+            this.ControlBox = true;
             this.Controls.Add(this.adminCheckBox);
             this.Controls.Add(this.adminLabel);
             this.Controls.Add(this.createUserButton);

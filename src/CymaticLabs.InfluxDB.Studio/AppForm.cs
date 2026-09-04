@@ -635,6 +635,14 @@ namespace CymaticLabs.InfluxDB.Studio
             await DropDatabase(node);
         }
 
+        // Database|Measurement -> Import Line Protocol
+        private async void importLineProtocolToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            var node = connectionsTreeView.SelectedNode;
+            if (node == null) return;
+            await ImportLineProtocol(node);
+        }
+
         #endregion Database Context Menu
 
         #region Measurement Context Menu
@@ -1515,6 +1523,107 @@ namespace CymaticLabs.InfluxDB.Studio
             {
                 DisplayException(ex);
             }
+        }
+
+        // Database|Measurement -> Import Line Protocol
+        async Task ImportLineProtocol(TreeNode node)
+        {
+            try
+            {
+                var type = GetNodeType(node);
+                if (type != InfluxDbNodeTypes.Database && type != InfluxDbNodeTypes.Measurement)
+                    return;
+
+                var database = GetDatabaseName(node);
+                if (string.IsNullOrWhiteSpace(database))
+                {
+                    DisplayError(Localization.T("Database name cannot be blank."));
+                    return;
+                }
+
+                var connection = GetConnection(node);
+                if (connection == null)
+                {
+                    DisplayError(Localization.T("Connection not found."));
+                    return;
+                }
+
+                var client = GetClient(connection);
+                if (client == null)
+                {
+                    DisplayError(Localization.T("Connection not found."));
+                    return;
+                }
+
+                IEnumerable<InfluxDbRetentionPolicy> policies = null;
+                try
+                {
+                    policies = await client.GetRetentionPoliciesAsync(database);
+                }
+                catch
+                {
+                    // Dialog still works with database-default RP only.
+                }
+
+                using (var dialog = new ImportLineProtocolDialog(database, policies))
+                {
+                    if (dialog.ShowDialog(this) != DialogResult.OK)
+                        return;
+
+                    var raw = File.ReadAllText(dialog.FilePath, System.Text.Encoding.UTF8);
+                    var lineCount = CountLineProtocolLines(raw);
+                    if (lineCount == 0)
+                    {
+                        DisplayError(Localization.T("The selected file has no Line Protocol data to import."));
+                        return;
+                    }
+
+                    var response = await client.WriteLineProtocolAsync(
+                        database,
+                        raw,
+                        "ns",
+                        dialog.RetentionPolicyName,
+                        dialog.Consistency);
+
+                    if (!response.Success)
+                    {
+                        DisplayError(response.Body, Localization.T("Error Importing Line Protocol"));
+                        return;
+                    }
+
+                    var dbNode = type == InfluxDbNodeTypes.Database ? node : node.Parent;
+                    if (dbNode != null)
+                        await RefreshDatabase(dbNode);
+
+                    MessageBox.Show(
+                        Localization.Format("Imported {0} line(s) into \"{1}\".", lineCount, database),
+                        Localization.T("Import Line Protocol"),
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                DisplayException(ex);
+            }
+        }
+
+        static int CountLineProtocolLines(string lineProtocol)
+        {
+            if (string.IsNullOrEmpty(lineProtocol)) return 0;
+
+            var count = 0;
+            using (var reader = new StringReader(lineProtocol))
+            {
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    line = line.Trim();
+                    if (line.Length == 0 || line[0] == '#') continue;
+                    count++;
+                }
+            }
+            return count;
         }
 
         #endregion Database

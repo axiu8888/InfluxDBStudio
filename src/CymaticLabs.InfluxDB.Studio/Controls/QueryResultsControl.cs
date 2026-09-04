@@ -24,6 +24,16 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         // A cache of the last results received.
         InfluxDbSeries lastResult;
 
+        // Column/item under the mouse when opening the context menu or copying a cell/column.
+        int contextColumnIndex = -1;
+        ListViewItem contextItem;
+
+        // Column selected by clicking the header (Excel-like whole-column selection).
+        int selectedColumnIndex = -1;
+
+        static readonly Color ColumnSelectionBackColor = Color.FromArgb(204, 232, 255);
+        static readonly Color ColumnSelectionHeaderBackColor = Color.FromArgb(160, 200, 240);
+
         #endregion Fields
 
         #region Properties
@@ -52,6 +62,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             listView.DrawColumnHeader += listView_DrawColumnHeader;
             listView.DrawItem += listView_DrawItem;
             listView.DrawSubItem += listView_DrawSubItem;
+            listView.ColumnClick += listView_ColumnClick;
         }
 
         #endregion Constructors
@@ -76,6 +87,12 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             ExportToJson();
         }
 
+        // Export All -> Line Protocol
+        private async void exportAllLineProtocolToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            await ExportToLineProtocol();
+        }
+
         // Export Selected -> Excel
         private void exportSelectedExcelToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -94,9 +111,135 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             ExportToJson(true);
         }
 
+        // Export Selected -> Line Protocol
+        private async void exportSelectedLineProtocolToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            await ExportToLineProtocol(true);
+        }
+
+        void listView_MouseDown(object sender, MouseEventArgs e)
+        {
+            var hit = listView.HitTest(e.Location);
+            contextItem = hit.Item;
+            contextColumnIndex = -1;
+
+            if (hit.Item != null && hit.SubItem != null)
+            {
+                contextColumnIndex = hit.Item.SubItems.IndexOf(hit.SubItem);
+
+                // Left-click a cell leaves column-header selection mode.
+                if (e.Button == MouseButtons.Left && selectedColumnIndex >= 0)
+                {
+                    selectedColumnIndex = -1;
+                    listView.Invalidate();
+                }
+
+                if (e.Button == MouseButtons.Right && !hit.Item.Selected && selectedColumnIndex < 0)
+                {
+                    // Right-click on an unselected row focuses that row for copy actions.
+                    listView.SelectedItems.Clear();
+                    hit.Item.Selected = true;
+                    hit.Item.Focused = true;
+                }
+            }
+            else if (e.Button == MouseButtons.Right && selectedColumnIndex >= 0)
+            {
+                contextColumnIndex = selectedColumnIndex;
+            }
+        }
+
+        void listView_ColumnClick(object sender, ColumnClickEventArgs e)
+        {
+            // Click header to select the whole column (like Excel).
+            if (e.Column < 0 || e.Column >= listView.Columns.Count) return;
+
+            selectedColumnIndex = e.Column;
+            contextColumnIndex = e.Column;
+            contextItem = null;
+            listView.SelectedItems.Clear();
+            listView.Invalidate();
+            listView.Focus();
+        }
+
+        void listView_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Control && e.KeyCode == Keys.A)
+            {
+                SelectAllRows();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+            }
+            else if (e.Control && e.KeyCode == Keys.C)
+            {
+                if (selectedColumnIndex >= 0)
+                    CopyColumn();
+                else
+                    CopySelectedRowsAsJson();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+            }
+            else if (e.KeyCode == Keys.Escape && selectedColumnIndex >= 0)
+            {
+                selectedColumnIndex = -1;
+                listView.Invalidate();
+                e.Handled = true;
+            }
+        }
+
+        void SelectAllRows()
+        {
+            if (listView.Items.Count == 0) return;
+
+            selectedColumnIndex = -1;
+            listView.BeginUpdate();
+            foreach (ListViewItem item in listView.Items)
+                item.Selected = true;
+            listView.EndUpdate();
+            listView.Invalidate();
+        }
+
+        void contextMenuStrip_Opening(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            var hasSelection = listView.SelectedItems.Count > 0;
+            var hasCell = contextItem != null && contextColumnIndex >= 0
+                && contextColumnIndex < contextItem.SubItems.Count;
+            var hasColumnTarget = selectedColumnIndex >= 0
+                || (contextColumnIndex >= 0 && (hasSelection || listView.Items.Count > 0));
+
+            copyCellToolStripMenuItem.Enabled = hasCell;
+            copyRowsToolStripMenuItem.Enabled = hasSelection;
+            copyColumnToolStripMenuItem.Enabled = hasColumnTarget && listView.Items.Count > 0;
+        }
+
+        void copyCellToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            CopyCell();
+        }
+
+        void copyRowsJsonToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            CopySelectedRowsAsJson();
+        }
+
+        void copyRowsKeyValueToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            CopySelectedRowsAsKeyValue();
+        }
+
+        void copyColumnToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            CopyColumn();
+        }
+
         void listView_DrawColumnHeader(object sender, DrawListViewColumnHeaderEventArgs e)
         {
-            e.DrawBackground();
+            var selected = e.ColumnIndex == selectedColumnIndex;
+            var backColor = selected ? ColumnSelectionHeaderBackColor : SystemColors.Control;
+            using (var back = new SolidBrush(backColor))
+                e.Graphics.FillRectangle(back, e.Bounds);
+
+            ControlPaint.DrawBorder(e.Graphics, e.Bounds, SystemColors.ControlDark, ButtonBorderStyle.Solid);
+
             TextRenderer.DrawText(
                 e.Graphics,
                 e.Header.Text,
@@ -114,13 +257,20 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
 
         void listView_DrawSubItem(object sender, DrawListViewSubItemEventArgs e)
         {
-            var selected = e.Item.Selected;
+            var rowSelected = e.Item.Selected;
+            var columnSelected = e.ColumnIndex == selectedColumnIndex;
             Color backColor;
             Color foreColor;
-            if (selected)
+
+            if (rowSelected)
             {
                 backColor = listView.Focused ? SystemColors.Highlight : SystemColors.ControlLight;
                 foreColor = listView.Focused ? SystemColors.HighlightText : e.Item.ForeColor;
+            }
+            else if (columnSelected)
+            {
+                backColor = ColumnSelectionBackColor;
+                foreColor = e.Item.ForeColor;
             }
             else
             {
@@ -158,6 +308,9 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             // Clear out current items
             resultsCount = 0;
             tagsTextBox.Text = null;
+            selectedColumnIndex = -1;
+            contextColumnIndex = -1;
+            contextItem = null;
             listView.BeginUpdate();
             listView.Columns.Clear();
             listView.Items.Clear();
@@ -404,6 +557,265 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             catch (Exception ex)
             {
                 AppForm.DisplayException(ex);
+            }
+        }
+
+        async Task ExportToLineProtocol(bool onlySelected = false)
+        {
+            try
+            {
+                if (lastResult == null)
+                    return;
+
+                if (string.IsNullOrWhiteSpace(lastResult.Name))
+                {
+                    AppForm.DisplayError(Localization.T(
+                        "Cannot export Line Protocol: the result has no measurement name. Use a SELECT query against a measurement."));
+                    return;
+                }
+
+                saveFileDialog.FileName = string.Format("{0}.lp", InfluxDbClient.Connection.Name + "_" + Database);
+                saveFileDialog.Filter = Localization.T("Line Protocol files|*.lp|All files|*.*");
+
+                if (saveFileDialog.ShowDialog() != DialogResult.OK)
+                    return;
+
+                ICollection<string> tagKeys = null;
+                ICollection<string> fieldKeys = null;
+
+                try
+                {
+                    if (InfluxDbClient != null && !string.IsNullOrWhiteSpace(Database))
+                    {
+                        var tags = await InfluxDbClient.GetTagKeysAsync(Database, lastResult.Name);
+                        var fields = await InfluxDbClient.GetFieldKeysAsync(Database, lastResult.Name);
+                        if (tags != null) tagKeys = new List<string>(tags);
+                        if (fields != null)
+                        {
+                            fieldKeys = new List<string>();
+                            foreach (var fk in fields)
+                            {
+                                if (fk != null && !string.IsNullOrEmpty(fk.Name))
+                                    fieldKeys.Add(fk.Name);
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Schema lookup is best-effort; fall back to series.Tags + columns-as-fields.
+                }
+
+                List<int> selectedIndexes = null;
+                if (onlySelected)
+                {
+                    selectedIndexes = new List<int>();
+                    for (var i = 0; i < listView.Items.Count; i++)
+                    {
+                        if (listView.Items[i].Selected)
+                            selectedIndexes.Add(i);
+                    }
+                }
+
+                var body = LineProtocolExport.FormatSeries(lastResult, tagKeys, fieldKeys, selectedIndexes);
+                if (string.IsNullOrEmpty(body))
+                {
+                    AppForm.DisplayError(Localization.T(
+                        "No Line Protocol lines were generated (need at least one field per point)."));
+                    return;
+                }
+
+                File.WriteAllText(saveFileDialog.FileName, body, new UTF8Encoding(false));
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
+        void CopyCell()
+        {
+            try
+            {
+                if (contextItem == null || contextColumnIndex < 0
+                    || contextColumnIndex >= contextItem.SubItems.Count)
+                    return;
+
+                SetClipboardText(contextItem.SubItems[contextColumnIndex].Text ?? string.Empty);
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
+        void CopySelectedRowsAsJson()
+        {
+            try
+            {
+                var rows = GetSelectedRawRows();
+                if (rows.Count == 0) return;
+
+                var array = new List<Dictionary<string, object>>();
+                foreach (var row in rows)
+                {
+                    var d = new Dictionary<string, object>();
+                    for (var i = 0; i < row.Count && i < lastResult.Columns.Count; i++)
+                    {
+                        var key = lastResult.Columns[i];
+                        d[key] = AppForm.Settings.ToLocalExportValue(row[i]);
+                    }
+                    array.Add(d);
+                }
+
+                var json = JsonConvert.SerializeObject(array, Formatting.Indented);
+                SetClipboardText(json);
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
+        void CopySelectedRowsAsKeyValue()
+        {
+            try
+            {
+                var rows = GetSelectedRawRows();
+                if (rows.Count == 0) return;
+
+                var sb = new StringBuilder();
+                for (var r = 0; r < rows.Count; r++)
+                {
+                    if (r > 0) sb.AppendLine();
+                    AppendKeyValueLine(sb, rows[r]);
+                }
+
+                SetClipboardText(sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
+        void AppendKeyValueLine(StringBuilder sb, IList<object> row)
+        {
+            var first = true;
+            for (var i = 0; i < row.Count && i < lastResult.Columns.Count; i++)
+            {
+                var value = row[i];
+                if (value == null) continue;
+
+                if (!first) sb.Append(", ");
+                first = false;
+
+                sb.Append(lastResult.Columns[i]);
+                sb.Append('=');
+                AppendKeyValueLiteral(sb, value);
+            }
+        }
+
+        void AppendKeyValueLiteral(StringBuilder sb, object value)
+        {
+            if (value is bool)
+            {
+                sb.Append((bool)value ? "true" : "false");
+                return;
+            }
+
+            if (value is sbyte || value is byte || value is short || value is ushort
+                || value is int || value is uint || value is long || value is ulong
+                || value is float || value is double || value is decimal)
+            {
+                sb.Append(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture));
+                return;
+            }
+
+            DateTime dt;
+            if (AppSettings.TryGetDateTime(value, out dt))
+            {
+                // Match the query results list display (local time + user date/time format).
+                var display = AppForm.Settings.FormatDateTime(dt) ?? string.Empty;
+                sb.Append('"');
+                sb.Append(display.Replace("\\", "\\\\").Replace("\"", "\\\""));
+                sb.Append('"');
+                return;
+            }
+
+            // Other string-like values: quoted
+            var text = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+            sb.Append('"');
+            sb.Append(text.Replace("\\", "\\\\").Replace("\"", "\\\""));
+            sb.Append('"');
+        }
+
+        List<IList<object>> GetSelectedRawRows()
+        {
+            var rows = new List<IList<object>>();
+            if (lastResult == null || lastResult.Values == null) return rows;
+
+            foreach (ListViewItem item in listView.Items)
+            {
+                if (!item.Selected) continue;
+
+                IList<object> raw = null;
+                if (item.SubItems.Count > 1)
+                    raw = item.SubItems[1].Tag as IList<object>;
+
+                if (raw == null)
+                {
+                    var index = item.Index;
+                    if (index >= 0 && index < lastResult.Values.Count)
+                        raw = lastResult.Values[index];
+                }
+
+                if (raw != null) rows.Add(raw);
+            }
+
+            return rows;
+        }
+
+        void CopyColumn()
+        {
+            try
+            {
+                var columnIndex = selectedColumnIndex >= 0 ? selectedColumnIndex : contextColumnIndex;
+                if (columnIndex < 0 || columnIndex >= listView.Columns.Count) return;
+                if (listView.Items.Count == 0) return;
+
+                var wholeColumn = selectedColumnIndex >= 0;
+                var sb = new StringBuilder();
+                var first = true;
+
+                foreach (ListViewItem item in listView.Items)
+                {
+                    if (!wholeColumn && !item.Selected) continue;
+                    if (!first) sb.AppendLine();
+                    first = false;
+                    if (columnIndex < item.SubItems.Count)
+                        sb.Append(item.SubItems[columnIndex].Text);
+                }
+
+                SetClipboardText(sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
+        static void SetClipboardText(string text)
+        {
+            if (text == null) text = string.Empty;
+
+            try
+            {
+                Clipboard.SetText(text);
+            }
+            catch
+            {
+                Clipboard.SetDataObject(text, true);
             }
         }
 

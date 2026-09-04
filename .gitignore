@@ -13,8 +13,8 @@ packages/*
 [Oo]bj/
 *.suo
 *.user
-.vs/config/applicationhost.config
 src/*.Testing/*.xml
 ImagesRaw/
+.vs/
 dist/
 tools/nuget.exe

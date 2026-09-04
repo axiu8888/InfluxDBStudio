@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using InfluxData.Net.InfluxDb.Enums;
 using InfluxData.Net.Common.Enums;
@@ -545,6 +548,113 @@ namespace CymaticLabs.InfluxDB.Data
             
             var response = await influx.Client.WriteAsync( list, database, retentionPolicy).ConfigureAwait(false);
             return new InfluxDbApiResponse(response.Body, response.StatusCode, response.Success);
+        }
+
+        /// <summary>
+        /// Writes raw InfluxDB line protocol text to the specified database.
+        /// </summary>
+        public async override Task<InfluxDbApiResponse> WriteLineProtocolAsync(
+            string database, string lineProtocol, string precision = "ns",
+            string retentionPolicy = null, string consistency = null)
+        {
+            if (string.IsNullOrWhiteSpace(database)) throw new ArgumentNullException("database");
+            if (lineProtocol == null) throw new ArgumentNullException("lineProtocol");
+
+            var lines = NormalizeLineProtocol(lineProtocol);
+            if (lines.Count == 0)
+                return new InfluxDbApiResponse("OK", HttpStatusCode.NoContent, true);
+
+            if (string.IsNullOrWhiteSpace(precision)) precision = "ns";
+
+            const int batchSize = 5000;
+            InfluxDbApiResponse lastResponse = null;
+
+            for (var offset = 0; offset < lines.Count; offset += batchSize)
+            {
+                var count = Math.Min(batchSize, lines.Count - offset);
+                var batch = new StringBuilder();
+                for (var i = 0; i < count; i++)
+                {
+                    if (i > 0) batch.Append('\n');
+                    batch.Append(lines[offset + i]);
+                }
+
+                lastResponse = await PostLineProtocolAsync(
+                        database, batch.ToString(), precision, retentionPolicy, consistency)
+                    .ConfigureAwait(false);
+
+                if (!lastResponse.Success)
+                    return lastResponse;
+            }
+
+            return lastResponse;
+        }
+
+        static List<string> NormalizeLineProtocol(string lineProtocol)
+        {
+            var result = new List<string>();
+            using (var reader = new System.IO.StringReader(lineProtocol))
+            {
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    line = line.Trim();
+                    if (line.Length == 0) continue;
+                    if (line[0] == '#') continue;
+                    result.Add(line);
+                }
+            }
+            return result;
+        }
+
+        async Task<InfluxDbApiResponse> PostLineProtocolAsync(
+            string database, string body, string precision, string retentionPolicy, string consistency)
+        {
+            var baseUrl = Connection.HttpConnectionString.TrimEnd('/');
+            var url = new StringBuilder();
+            url.Append(baseUrl);
+            url.Append("/write?db=");
+            url.Append(Uri.EscapeDataString(database));
+            url.Append("&precision=");
+            url.Append(Uri.EscapeDataString(precision));
+
+            if (!string.IsNullOrWhiteSpace(retentionPolicy))
+            {
+                url.Append("&rp=");
+                url.Append(Uri.EscapeDataString(retentionPolicy));
+            }
+
+            if (!string.IsNullOrWhiteSpace(consistency))
+            {
+                url.Append("&consistency=");
+                url.Append(Uri.EscapeDataString(consistency));
+            }
+
+            if (!string.IsNullOrEmpty(Connection.Username))
+            {
+                url.Append("&u=");
+                url.Append(Uri.EscapeDataString(Connection.Username));
+            }
+
+            if (!string.IsNullOrEmpty(Connection.Password))
+            {
+                url.Append("&p=");
+                url.Append(Uri.EscapeDataString(Connection.Password));
+            }
+
+            using (var http = new HttpClient())
+            {
+                http.Timeout = TimeSpan.FromMinutes(5);
+                using (var content = new StringContent(body, Encoding.UTF8, "text/plain"))
+                using (var response = await http.PostAsync(url.ToString(), content).ConfigureAwait(false))
+                {
+                    var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    if (string.IsNullOrWhiteSpace(responseBody))
+                        responseBody = response.IsSuccessStatusCode ? "OK" : (response.ReasonPhrase ?? "Error");
+
+                    return new InfluxDbApiResponse(responseBody, response.StatusCode, response.IsSuccessStatusCode);
+                }
+            }
         }
 
         #endregion Write
