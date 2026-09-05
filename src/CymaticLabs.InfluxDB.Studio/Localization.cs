@@ -217,6 +217,8 @@ namespace CymaticLabs.InfluxDB.Studio
                 { "Copy as JSON", "复制为 JSON" },
                 { "Copy as Key=Value", "复制为 Key=Value" },
                 { "Copy Column", "复制列" },
+                { "Copy Header", "复制表头" },
+                { "Copy All Headers", "复制全部表头" },
                 { "Nothing to copy.", "没有可复制的内容。" },
                 { "CSV", "CSV" },
                 { "Excel", "Excel" },

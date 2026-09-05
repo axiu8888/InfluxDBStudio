@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.IO;
 using Newtonsoft.Json;
 using CymaticLabs.InfluxDB.Data;
 using CymaticLabs.InfluxDB.Studio;
@@ -18,35 +19,18 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
     {
         #region Fields
 
-        // Used to give resulting rows an ID number
         int resultsCount = 0;
-
-        // A cache of the last results received.
         InfluxDbSeries lastResult;
 
-        // Column/item under the mouse when opening the context menu or copying a cell/column.
-        int contextColumnIndex = -1;
-        ListViewItem contextItem;
-
-        // Column selected by clicking the header (Excel-like whole-column selection).
-        int selectedColumnIndex = -1;
-
-        static readonly Color ColumnSelectionBackColor = Color.FromArgb(204, 232, 255);
-        static readonly Color ColumnSelectionHeaderBackColor = Color.FromArgb(160, 200, 240);
+        // Anchor for Shift+click column/row header ranges (Excel-like).
+        int anchorColumnIndex = -1;
+        int anchorRowIndex = -1;
 
         #endregion Fields
 
         #region Properties
 
-        /// <summary>
-        /// Gets or sets the <see cref="InfluxDB.InfluxDbClient">InfluxDB connection</see> associated
-        /// with the control.
-        /// </summary>
         public InfluxDbClient InfluxDbClient { get; set; }
-
-        /// <summary>
-        /// Gets or sets the name of the database associated with the control.
-        /// </summary>
         public string Database { get; set; }
 
         #endregion Properties
@@ -58,162 +42,168 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             InitializeComponent();
             Localization.Apply(this);
 
-            listView.OwnerDraw = true;
-            listView.DrawColumnHeader += listView_DrawColumnHeader;
-            listView.DrawItem += listView_DrawItem;
-            listView.DrawSubItem += listView_DrawSubItem;
-            listView.ColumnClick += listView_ColumnClick;
+            dataGridView.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            dataGridView.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            dataGridView.RowHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            dataGridView.DefaultCellStyle.SelectionBackColor = SystemColors.Highlight;
+            dataGridView.DefaultCellStyle.SelectionForeColor = SystemColors.HighlightText;
         }
 
         #endregion Constructors
 
         #region Event Handlers
 
-        // Export All -> CSV
         private async void exportAllCsvToolStripMenuItem_Click(object sender, EventArgs e)
         {
             await ExportToCsv();
         }
 
-        // Export All -> Excel
         private void exportAllExcelToolStripMenuItem_Click(object sender, EventArgs e)
         {
             ExportToExcel();
         }
 
-        // Export All -> JSON
         private void jSONToolStripMenuItem_Click(object sender, EventArgs e)
         {
             ExportToJson();
         }
 
-        // Export All -> Line Protocol
         private async void exportAllLineProtocolToolStripMenuItem_Click(object sender, EventArgs e)
         {
             await ExportToLineProtocol();
         }
 
-        // Export Selected -> Excel
         private void exportSelectedExcelToolStripMenuItem_Click(object sender, EventArgs e)
         {
             ExportToExcel(true);
         }
 
-        // Export Selected -> CSV
         private async void exportSelectedCsvToolStripMenuItem_Click(object sender, EventArgs e)
         {
             await ExportToCsv(true);
         }
 
-        // Export Selected -> JSON
         private void jSONToolStripMenuItem1_Click(object sender, EventArgs e)
         {
             ExportToJson(true);
         }
 
-        // Export Selected -> Line Protocol
         private async void exportSelectedLineProtocolToolStripMenuItem_Click(object sender, EventArgs e)
         {
             await ExportToLineProtocol(true);
         }
 
-        void listView_MouseDown(object sender, MouseEventArgs e)
+        void dataGridView_MouseDown(object sender, MouseEventArgs e)
         {
-            var hit = listView.HitTest(e.Location);
-            contextItem = hit.Item;
-            contextColumnIndex = -1;
+            if (e.Button != MouseButtons.Right) return;
 
-            if (hit.Item != null && hit.SubItem != null)
+            var hit = dataGridView.HitTest(e.X, e.Y);
+            if (hit.Type == DataGridViewHitTestType.Cell
+                && hit.RowIndex >= 0 && hit.ColumnIndex >= 0
+                && !dataGridView[hit.ColumnIndex, hit.RowIndex].Selected)
             {
-                contextColumnIndex = hit.Item.SubItems.IndexOf(hit.SubItem);
-
-                // Left-click a cell leaves column-header selection mode.
-                if (e.Button == MouseButtons.Left && selectedColumnIndex >= 0)
-                {
-                    selectedColumnIndex = -1;
-                    listView.Invalidate();
-                }
-
-                if (e.Button == MouseButtons.Right && !hit.Item.Selected && selectedColumnIndex < 0)
-                {
-                    // Right-click on an unselected row focuses that row for copy actions.
-                    listView.SelectedItems.Clear();
-                    hit.Item.Selected = true;
-                    hit.Item.Focused = true;
-                }
-            }
-            else if (e.Button == MouseButtons.Right && selectedColumnIndex >= 0)
-            {
-                contextColumnIndex = selectedColumnIndex;
+                dataGridView.ClearSelection();
+                dataGridView[hit.ColumnIndex, hit.RowIndex].Selected = true;
+                dataGridView.CurrentCell = dataGridView[hit.ColumnIndex, hit.RowIndex];
             }
         }
 
-        void listView_ColumnClick(object sender, ColumnClickEventArgs e)
+        void dataGridView_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
         {
-            // Click header to select the whole column (like Excel).
-            if (e.Column < 0 || e.Column >= listView.Columns.Count) return;
+            if (e.ColumnIndex < 0 || e.Button != MouseButtons.Left) return;
+            if (dataGridView.Rows.Count == 0) return;
 
-            selectedColumnIndex = e.Column;
-            contextColumnIndex = e.Column;
-            contextItem = null;
-            listView.SelectedItems.Clear();
-            listView.Invalidate();
-            listView.Focus();
+            var ctrl = (ModifierKeys & Keys.Control) == Keys.Control;
+            var shift = (ModifierKeys & Keys.Shift) == Keys.Shift;
+
+            if (!ctrl && !shift)
+                dataGridView.ClearSelection();
+
+            int from = e.ColumnIndex;
+            int to = e.ColumnIndex;
+            if (shift && anchorColumnIndex >= 0)
+            {
+                from = Math.Min(anchorColumnIndex, e.ColumnIndex);
+                to = Math.Max(anchorColumnIndex, e.ColumnIndex);
+            }
+            else if (!ctrl)
+            {
+                anchorColumnIndex = e.ColumnIndex;
+            }
+
+            if (!shift)
+                anchorColumnIndex = e.ColumnIndex;
+
+            for (var c = from; c <= to; c++)
+                SelectEntireColumn(c, true);
+
+            dataGridView.Focus();
         }
 
-        void listView_KeyDown(object sender, KeyEventArgs e)
+        void dataGridView_RowHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.Button != MouseButtons.Left) return;
+
+            var ctrl = (ModifierKeys & Keys.Control) == Keys.Control;
+            var shift = (ModifierKeys & Keys.Shift) == Keys.Shift;
+
+            if (!ctrl && !shift)
+                dataGridView.ClearSelection();
+
+            int from = e.RowIndex;
+            int to = e.RowIndex;
+            if (shift && anchorRowIndex >= 0)
+            {
+                from = Math.Min(anchorRowIndex, e.RowIndex);
+                to = Math.Max(anchorRowIndex, e.RowIndex);
+            }
+            else if (!ctrl)
+            {
+                anchorRowIndex = e.RowIndex;
+            }
+
+            if (!shift)
+                anchorRowIndex = e.RowIndex;
+
+            for (var r = from; r <= to; r++)
+                SelectEntireRow(r, true);
+
+            dataGridView.Focus();
+        }
+
+        void dataGridView_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Control && e.KeyCode == Keys.A)
             {
-                SelectAllRows();
+                dataGridView.SelectAll();
                 e.Handled = true;
                 e.SuppressKeyPress = true;
             }
             else if (e.Control && e.KeyCode == Keys.C)
             {
-                if (selectedColumnIndex >= 0)
-                    CopyColumn();
-                else
-                    CopySelectedRowsAsJson();
+                CopySelectionAsTsv();
                 e.Handled = true;
                 e.SuppressKeyPress = true;
             }
-            else if (e.KeyCode == Keys.Escape && selectedColumnIndex >= 0)
-            {
-                selectedColumnIndex = -1;
-                listView.Invalidate();
-                e.Handled = true;
-            }
-        }
-
-        void SelectAllRows()
-        {
-            if (listView.Items.Count == 0) return;
-
-            selectedColumnIndex = -1;
-            listView.BeginUpdate();
-            foreach (ListViewItem item in listView.Items)
-                item.Selected = true;
-            listView.EndUpdate();
-            listView.Invalidate();
         }
 
         void contextMenuStrip_Opening(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            var hasSelection = listView.SelectedItems.Count > 0;
-            var hasCell = contextItem != null && contextColumnIndex >= 0
-                && contextColumnIndex < contextItem.SubItems.Count;
-            var hasColumnTarget = selectedColumnIndex >= 0
-                || (contextColumnIndex >= 0 && (hasSelection || listView.Items.Count > 0));
+            var hasCells = dataGridView.GetCellCount(DataGridViewElementStates.Selected) > 0;
+            var hasRows = GetSelectedRowIndexes().Count > 0;
+            var hasHeaderCols = GetSelectedDataColumnIndexes().Count > 0;
+            var hasAnyHeader = dataGridView.Columns.Count > 1;
 
-            copyCellToolStripMenuItem.Enabled = hasCell;
-            copyRowsToolStripMenuItem.Enabled = hasSelection;
-            copyColumnToolStripMenuItem.Enabled = hasColumnTarget && listView.Items.Count > 0;
+            copySelectionToolStripMenuItem.Enabled = hasCells;
+            copyRowsToolStripMenuItem.Enabled = hasRows;
+            copyHeaderToolStripMenuItem.Enabled = hasHeaderCols;
+            copyAllHeadersToolStripMenuItem.Enabled = hasAnyHeader;
+            exportSelectedToolStripMenuItem.Enabled = hasRows;
         }
 
-        void copyCellToolStripMenuItem_Click(object sender, EventArgs e)
+        void copySelectionToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            CopyCell();
+            CopySelectionAsTsv();
         }
 
         void copyRowsJsonToolStripMenuItem_Click(object sender, EventArgs e)
@@ -226,228 +216,165 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             CopySelectedRowsAsKeyValue();
         }
 
-        void copyColumnToolStripMenuItem_Click(object sender, EventArgs e)
+        void copyHeaderToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            CopyColumn();
+            CopySelectedHeaders();
         }
 
-        void listView_DrawColumnHeader(object sender, DrawListViewColumnHeaderEventArgs e)
+        void copyAllHeadersToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            var selected = e.ColumnIndex == selectedColumnIndex;
-            var backColor = selected ? ColumnSelectionHeaderBackColor : SystemColors.Control;
-            using (var back = new SolidBrush(backColor))
-                e.Graphics.FillRectangle(back, e.Bounds);
-
-            ControlPaint.DrawBorder(e.Graphics, e.Bounds, SystemColors.ControlDark, ButtonBorderStyle.Solid);
-
-            TextRenderer.DrawText(
-                e.Graphics,
-                e.Header.Text,
-                e.Font,
-                e.Bounds,
-                e.ForeColor,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-        }
-
-        void listView_DrawItem(object sender, DrawListViewItemEventArgs e)
-        {
-            // Drawing is handled in DrawSubItem so every column can be centered,
-            // including the first column which ListView cannot center by default.
-        }
-
-        void listView_DrawSubItem(object sender, DrawListViewSubItemEventArgs e)
-        {
-            var rowSelected = e.Item.Selected;
-            var columnSelected = e.ColumnIndex == selectedColumnIndex;
-            Color backColor;
-            Color foreColor;
-
-            if (rowSelected)
-            {
-                backColor = listView.Focused ? SystemColors.Highlight : SystemColors.ControlLight;
-                foreColor = listView.Focused ? SystemColors.HighlightText : e.Item.ForeColor;
-            }
-            else if (columnSelected)
-            {
-                backColor = ColumnSelectionBackColor;
-                foreColor = e.Item.ForeColor;
-            }
-            else
-            {
-                backColor = e.Item.BackColor;
-                foreColor = e.Item.ForeColor;
-            }
-
-            using (var back = new SolidBrush(backColor))
-                e.Graphics.FillRectangle(back, e.Bounds);
-
-            TextRenderer.DrawText(
-                e.Graphics,
-                e.SubItem.Text,
-                e.SubItem.Font ?? e.Item.Font,
-                e.Bounds,
-                foreColor,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-
-            if (listView.GridLines)
-            {
-                using (var pen = new Pen(SystemColors.ControlLight))
-                    e.Graphics.DrawRectangle(pen, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
-            }
+            CopyAllHeaders();
         }
 
         #endregion Event Handlers
 
         #region Methods
 
-        /// <summary>
-        /// Clears the current query results from the UI.
-        /// </summary>
         public void ClearResults()
         {
-            // Clear out current items
             resultsCount = 0;
             tagsTextBox.Text = null;
-            selectedColumnIndex = -1;
-            contextColumnIndex = -1;
-            contextItem = null;
-            listView.BeginUpdate();
-            listView.Columns.Clear();
-            listView.Items.Clear();
-            listView.EndUpdate();
+            anchorColumnIndex = -1;
+            anchorRowIndex = -1;
+            dataGridView.Rows.Clear();
+            dataGridView.Columns.Clear();
         }
 
-        /// <summary>
-        /// Updates the query control's query results UI with the supplied result.
-        /// </summary>
-        /// <param name="result">The query result to render.</param>
-        /// <returns>The total number of results found.</returns>
         public int UpdateResults(InfluxDbSeries result, bool clear = false)
         {
             if (result == null) throw new ArgumentNullException("result");
 
-            // Cache
             lastResult = result;
-
-            // Clear as needed
             if (clear) ClearResults();
 
-            // Add tag values to to results
-            if (result.Tags.Count > 0)
+            if (result.Tags != null && result.Tags.Count > 0)
             {
                 splitContainer.Panel1Collapsed = false;
                 var tagCount = result.Tags.Count;
                 var tagCounter = 0;
                 var sb = new StringBuilder();
-
                 foreach (var tag in result.Tags)
-                {
                     sb.AppendFormat("{0} = {1}{2}", tag.Key, tag.Value, ++tagCounter < tagCount ? ", " : null);
-                }
-
                 tagsTextBox.Text = sb.ToString();
             }
-            // Hide tag area if there are no tag values
             else
             {
                 splitContainer.Panel1Collapsed = true;
             }
 
-            // Start to update the list view with the new results
-            listView.BeginUpdate();
+            dataGridView.SuspendLayout();
 
-            // Build the first column
-            var colRecordNum = new ColumnHeader() { Text = Localization.T("#"), TextAlign = HorizontalAlignment.Center };
-            listView.Columns.Add(colRecordNum);
-
-            // Build the dynamic columns
-            foreach (var c in result.Columns)
+            if (dataGridView.Columns.Count == 0)
             {
-                var col = new ColumnHeader();
-                col.Text = c;
-                col.TextAlign = HorizontalAlignment.Center;
-                listView.Columns.Add(col);
+                var rowNum = CreateTextColumn("_rowNum", Localization.T("#"), 54);
+                dataGridView.Columns.Add(rowNum);
+
+                foreach (var c in result.Columns)
+                    dataGridView.Columns.Add(CreateTextColumn(c, c, 96));
             }
 
-            // Build the rows
+            var columnWidth = Math.Max(96, (Width - 12) / Math.Max(1, dataGridView.Columns.Count));
+            foreach (DataGridViewColumn col in dataGridView.Columns)
+            {
+                if (col.Name == "_rowNum") continue;
+                col.Width = columnWidth;
+            }
+
             for (var i = 0; i < result.Values.Count; i++)
             {
-                // Create the top level row item and give it the record number as a label
-                ListViewItem li = new ListViewItem((++resultsCount).ToString());
-                listView.Items.Add(li);
+                var raw = result.Values[i];
+                var values = new object[dataGridView.Columns.Count];
+                values[0] = (++resultsCount).ToString(CultureInfo.InvariantCulture);
 
-                // Get the columns/values for the row
-                var r = result.Values[i];
+                for (var x = 0; x < raw.Count && x + 1 < values.Length; x++)
+                    values[x + 1] = AppForm.Settings.FormatValue(raw[x]);
 
-                for (var x = 0; x < r.Count; x++)
-                {
-                    // Get the value
-                    var v = r[x];
-
-                    // Attach the column values as subitems
-                    var li2 = new ListViewItem.ListViewSubItem(li, AppForm.Settings.FormatValue(v));
-                    li2.Tag = r;
-                    li.SubItems.Add(li2);
-                }
+                var index = dataGridView.Rows.Add(values);
+                dataGridView.Rows[index].Tag = raw;
             }
 
-            // Resize each column
-            if (listView.Columns.Count > 0)
-            {
-                var columnWidth = (Width - 12) / listView.Columns.Count;
-                if (columnWidth < 96) columnWidth = 96;
-                foreach (ColumnHeader col in listView.Columns) col.Width = columnWidth;
-            }
-
-            listView.EndUpdate();
-
+            dataGridView.ResumeLayout();
             return resultsCount;
         }
 
-        // Exports series data to CSV
+        static DataGridViewTextBoxColumn CreateTextColumn(string name, string header, int width)
+        {
+            return new DataGridViewTextBoxColumn
+            {
+                Name = name,
+                HeaderText = header,
+                Width = width,
+                ReadOnly = true,
+                SortMode = DataGridViewColumnSortMode.NotSortable,
+                Resizable = DataGridViewTriState.True
+            };
+        }
+
+        void SelectEntireColumn(int columnIndex, bool selected)
+        {
+            if (columnIndex < 0 || columnIndex >= dataGridView.Columns.Count) return;
+            for (var r = 0; r < dataGridView.Rows.Count; r++)
+                dataGridView[columnIndex, r].Selected = selected;
+        }
+
+        void SelectEntireRow(int rowIndex, bool selected)
+        {
+            if (rowIndex < 0 || rowIndex >= dataGridView.Rows.Count) return;
+            for (var c = 0; c < dataGridView.Columns.Count; c++)
+                dataGridView[c, rowIndex].Selected = selected;
+        }
+
+        List<int> GetSelectedRowIndexes()
+        {
+            var set = new SortedSet<int>();
+            foreach (DataGridViewCell cell in dataGridView.SelectedCells)
+            {
+                if (cell.RowIndex >= 0) set.Add(cell.RowIndex);
+            }
+            return new List<int>(set);
+        }
+
+        List<int> GetSelectedDataColumnIndexes()
+        {
+            var set = new SortedSet<int>();
+            foreach (DataGridViewCell cell in dataGridView.SelectedCells)
+            {
+                if (cell.ColumnIndex > 0) set.Add(cell.ColumnIndex);
+            }
+            return new List<int>(set);
+        }
+
         async Task ExportToCsv(bool onlySelected = false)
         {
             try
             {
-                // Configure save dialog and open
                 saveFileDialog.FileName = string.Format("{0}.csv", InfluxDbClient.Connection.Name + "_" + Database);
                 saveFileDialog.Filter = Localization.T("CSV files|*.csv|All files|*.*");
+                if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
 
-                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                var selectedRows = onlySelected ? new HashSet<int>(GetSelectedRowIndexes()) : null;
+
+                using (var sw = new StreamWriter(saveFileDialog.FileName))
                 {
                     var sb = new StringBuilder();
-
-                    // Create a stream writer to write the CSV file
-                    using (var sw = new StreamWriter(saveFileDialog.FileName))
+                    for (var i = 1; i < dataGridView.Columns.Count; i++)
                     {
+                        if (i > 1) sb.Append(',');
+                        sb.Append(dataGridView.Columns[i].HeaderText);
+                    }
+                    await sw.WriteLineAsync(sb.ToString());
+
+                    for (var r = 0; r < dataGridView.Rows.Count; r++)
+                    {
+                        if (selectedRows != null && !selectedRows.Contains(r)) continue;
                         sb.Clear();
-
-                        // Write the CSV column names (skip first column which is just row # label)
-                        for (var i = 1; i < listView.Columns.Count; i++)
+                        for (var c = 1; c < dataGridView.Columns.Count; c++)
                         {
-                            sb.Append(listView.Columns[i].Text);
-                            if (i < listView.Columns.Count - 1) sb.Append(",");
+                            if (c > 1) sb.Append(',');
+                            var val = dataGridView[c, r].Value;
+                            sb.Append(val == null ? string.Empty : val.ToString());
                         }
-
                         await sw.WriteLineAsync(sb.ToString());
-
-                        // Now write each series row
-                        foreach (ListViewItem li in listView.Items)
-                        {
-                            if (onlySelected && !li.Selected) continue;
-
-                            sb.Clear();
-
-                            // (skip first column which is just row # label)
-                            for (var i = 1; i < li.SubItems.Count; i++)
-                            {
-                                var sli = li.SubItems[i];
-                                sb.Append(sli.Text);
-                                if (i < li.SubItems.Count - 1) sb.Append(",");
-                            }
-
-                            await sw.WriteLineAsync(sb.ToString());
-                        }
                     }
                 }
             }
@@ -463,21 +390,23 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             {
                 saveFileDialog.FileName = string.Format("{0}.xlsx", InfluxDbClient.Connection.Name + "_" + Database);
                 saveFileDialog.Filter = Localization.T("Excel files|*.xlsx|All files|*.*");
-
                 if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
 
                 var headers = new List<string>();
-                for (var i = 1; i < listView.Columns.Count; i++)
-                    headers.Add(listView.Columns[i].Text);
+                for (var i = 1; i < dataGridView.Columns.Count; i++)
+                    headers.Add(dataGridView.Columns[i].HeaderText);
 
+                var selectedRows = onlySelected ? new HashSet<int>(GetSelectedRowIndexes()) : null;
                 var rows = new List<IList<string>>();
-                foreach (ListViewItem li in listView.Items)
+                for (var r = 0; r < dataGridView.Rows.Count; r++)
                 {
-                    if (onlySelected && !li.Selected) continue;
-
+                    if (selectedRows != null && !selectedRows.Contains(r)) continue;
                     var row = new List<string>();
-                    for (var i = 1; i < li.SubItems.Count; i++)
-                        row.Add(li.SubItems[i].Text);
+                    for (var c = 1; c < dataGridView.Columns.Count; c++)
+                    {
+                        var val = dataGridView[c, r].Value;
+                        row.Add(val == null ? string.Empty : val.ToString());
+                    }
                     rows.Add(row);
                 }
 
@@ -489,70 +418,16 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             }
         }
 
-        // Exports series data to a JSON array
         void ExportToJson(bool onlySelected = false)
         {
             try
             {
-                // Configure save dialog and open
                 saveFileDialog.FileName = string.Format("{0}.json", InfluxDbClient.Connection.Name + "_" + Database);
                 saveFileDialog.Filter = Localization.T("JSON files|*.json|All files|*.*");
+                if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
 
-                if (saveFileDialog.ShowDialog() == DialogResult.OK)
-                {
-                    // Collect the list of points
-                    var array = new List<object>();
-
-                    if (lastResult != null)
-                    {
-                        // Build name lookup
-                        var indexToName = new Dictionary<int, string>();
-
-                        foreach (var colName in lastResult.Columns)
-                        {
-                            if (!indexToName.ContainsKey(indexToName.Count))
-                                indexToName.Add(indexToName.Count, colName);
-                        }
-
-                        // Build selected states from UI state
-                        var selectedByRowId = new Dictionary<int, bool>();
-
-                        for (var i = 0; i < listView.Items.Count; i++)
-                        {
-                            var li = listView.Items[i];
-                            selectedByRowId.Add(i, li.Selected);
-                        }
-
-                        // Convert results to JSON for export
-                        for (var i = 0; i < lastResult.Values.Count; i++)
-                        {
-                            var r = lastResult.Values[i];
-
-                            if (onlySelected && !selectedByRowId[i]) continue;
-
-                            // Convert to outgoing dictionary
-                            var d = new Dictionary<string, object>();
-
-                            for (var x = 0; x < r.Count; x++)
-                            {
-                                var key = indexToName[x];
-                                var value = AppForm.Settings.ToLocalExportValue(r[x]);
-
-                                if (d.ContainsKey(key)) d[key] = value;
-                                else d.Add(key, value);
-                            }
-
-                            // Add to outgoing json structure
-                            array.Add(d);
-                        }
-                    }
-
-                    // Serialize to json
-                    var json = JsonConvert.SerializeObject(array, Formatting.Indented);
-
-                    // Write to disk
-                    File.WriteAllText(saveFileDialog.FileName, json);
-                }
+                var array = BuildJsonFromRows(onlySelected ? GetSelectedRowIndexes() : null);
+                File.WriteAllText(saveFileDialog.FileName, JsonConvert.SerializeObject(array, Formatting.Indented));
             }
             catch (Exception ex)
             {
@@ -564,8 +439,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             try
             {
-                if (lastResult == null)
-                    return;
+                if (lastResult == null) return;
 
                 if (string.IsNullOrWhiteSpace(lastResult.Name))
                 {
@@ -576,13 +450,10 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
 
                 saveFileDialog.FileName = string.Format("{0}.lp", InfluxDbClient.Connection.Name + "_" + Database);
                 saveFileDialog.Filter = Localization.T("Line Protocol files|*.lp|All files|*.*");
-
-                if (saveFileDialog.ShowDialog() != DialogResult.OK)
-                    return;
+                if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
 
                 ICollection<string> tagKeys = null;
                 ICollection<string> fieldKeys = null;
-
                 try
                 {
                     if (InfluxDbClient != null && !string.IsNullOrWhiteSpace(Database))
@@ -603,20 +474,9 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 }
                 catch
                 {
-                    // Schema lookup is best-effort; fall back to series.Tags + columns-as-fields.
                 }
 
-                List<int> selectedIndexes = null;
-                if (onlySelected)
-                {
-                    selectedIndexes = new List<int>();
-                    for (var i = 0; i < listView.Items.Count; i++)
-                    {
-                        if (listView.Items[i].Selected)
-                            selectedIndexes.Add(i);
-                    }
-                }
-
+                ICollection<int> selectedIndexes = onlySelected ? GetSelectedRowIndexes() : null;
                 var body = LineProtocolExport.FormatSeries(lastResult, tagKeys, fieldKeys, selectedIndexes);
                 if (string.IsNullOrEmpty(body))
                 {
@@ -633,15 +493,48 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             }
         }
 
-        void CopyCell()
+        /// <summary>
+        /// Excel-style clipboard: selected cells as TSV (rows/cols ordered).
+        /// </summary>
+        void CopySelectionAsTsv()
         {
             try
             {
-                if (contextItem == null || contextColumnIndex < 0
-                    || contextColumnIndex >= contextItem.SubItems.Count)
-                    return;
+                if (dataGridView.GetCellCount(DataGridViewElementStates.Selected) == 0) return;
 
-                SetClipboardText(contextItem.SubItems[contextColumnIndex].Text ?? string.Empty);
+                var rows = new SortedSet<int>();
+                var cols = new SortedSet<int>();
+                var selected = new HashSet<string>();
+
+                foreach (DataGridViewCell cell in dataGridView.SelectedCells)
+                {
+                    rows.Add(cell.RowIndex);
+                    cols.Add(cell.ColumnIndex);
+                    selected.Add(cell.RowIndex + "," + cell.ColumnIndex);
+                }
+
+                var sb = new StringBuilder();
+                var firstRow = true;
+                foreach (var r in rows)
+                {
+                    if (!firstRow) sb.AppendLine();
+                    firstRow = false;
+
+                    var firstCol = true;
+                    foreach (var c in cols)
+                    {
+                        if (!firstCol) sb.Append('\t');
+                        firstCol = false;
+
+                        if (selected.Contains(r + "," + c))
+                        {
+                            var val = dataGridView[c, r].Value;
+                            sb.Append(val == null ? string.Empty : val.ToString());
+                        }
+                    }
+                }
+
+                SetClipboardText(sb.ToString());
             }
             catch (Exception ex)
             {
@@ -653,23 +546,10 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             try
             {
-                var rows = GetSelectedRawRows();
-                if (rows.Count == 0) return;
-
-                var array = new List<Dictionary<string, object>>();
-                foreach (var row in rows)
-                {
-                    var d = new Dictionary<string, object>();
-                    for (var i = 0; i < row.Count && i < lastResult.Columns.Count; i++)
-                    {
-                        var key = lastResult.Columns[i];
-                        d[key] = AppForm.Settings.ToLocalExportValue(row[i]);
-                    }
-                    array.Add(d);
-                }
-
-                var json = JsonConvert.SerializeObject(array, Formatting.Indented);
-                SetClipboardText(json);
+                var indexes = GetSelectedRowIndexes();
+                if (indexes.Count == 0) return;
+                var array = BuildJsonFromRows(indexes);
+                SetClipboardText(JsonConvert.SerializeObject(array, Formatting.Indented));
             }
             catch (Exception ex)
             {
@@ -690,13 +570,104 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                     if (r > 0) sb.AppendLine();
                     AppendKeyValueLine(sb, rows[r]);
                 }
-
                 SetClipboardText(sb.ToString());
             }
             catch (Exception ex)
             {
                 AppForm.DisplayException(ex);
             }
+        }
+
+        void CopySelectedHeaders()
+        {
+            try
+            {
+                var cols = GetSelectedDataColumnIndexes();
+                if (cols.Count == 0) return;
+
+                var sb = new StringBuilder();
+                var first = true;
+                foreach (var c in cols)
+                {
+                    if (!first) sb.Append('\t');
+                    first = false;
+                    sb.Append(dataGridView.Columns[c].HeaderText);
+                }
+                SetClipboardText(sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
+        void CopyAllHeaders()
+        {
+            try
+            {
+                if (dataGridView.Columns.Count <= 1) return;
+                var sb = new StringBuilder();
+                for (var c = 1; c < dataGridView.Columns.Count; c++)
+                {
+                    if (c > 1) sb.Append('\t');
+                    sb.Append(dataGridView.Columns[c].HeaderText);
+                }
+                SetClipboardText(sb.ToString());
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
+        List<object> BuildJsonFromRows(IList<int> rowIndexes)
+        {
+            var array = new List<object>();
+            if (lastResult == null) return array;
+
+            if (rowIndexes == null)
+            {
+                for (var i = 0; i < lastResult.Values.Count; i++)
+                    array.Add(RowToDictionary(lastResult.Values[i]));
+            }
+            else
+            {
+                foreach (var i in rowIndexes)
+                {
+                    var raw = GetRawRowAt(i);
+                    if (raw != null) array.Add(RowToDictionary(raw));
+                }
+            }
+            return array;
+        }
+
+        Dictionary<string, object> RowToDictionary(IList<object> row)
+        {
+            var d = new Dictionary<string, object>();
+            for (var i = 0; i < row.Count && i < lastResult.Columns.Count; i++)
+                d[lastResult.Columns[i]] = AppForm.Settings.ToLocalExportValue(row[i]);
+            return d;
+        }
+
+        List<IList<object>> GetSelectedRawRows()
+        {
+            var rows = new List<IList<object>>();
+            foreach (var index in GetSelectedRowIndexes())
+            {
+                var raw = GetRawRowAt(index);
+                if (raw != null) rows.Add(raw);
+            }
+            return rows;
+        }
+
+        IList<object> GetRawRowAt(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= dataGridView.Rows.Count) return null;
+            var tagged = dataGridView.Rows[rowIndex].Tag as IList<object>;
+            if (tagged != null) return tagged;
+            if (lastResult != null && rowIndex < lastResult.Values.Count)
+                return lastResult.Values[rowIndex];
+            return null;
         }
 
         void AppendKeyValueLine(StringBuilder sb, IList<object> row)
@@ -706,10 +677,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             {
                 var value = row[i];
                 if (value == null) continue;
-
                 if (!first) sb.Append(", ");
                 first = false;
-
                 sb.Append(lastResult.Columns[i]);
                 sb.Append('=');
                 AppendKeyValueLiteral(sb, value);
@@ -728,14 +697,13 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 || value is int || value is uint || value is long || value is ulong
                 || value is float || value is double || value is decimal)
             {
-                sb.Append(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture));
+                sb.Append(Convert.ToString(value, CultureInfo.InvariantCulture));
                 return;
             }
 
             DateTime dt;
             if (AppSettings.TryGetDateTime(value, out dt))
             {
-                // Match the query results list display (local time + user date/time format).
                 var display = AppForm.Settings.FormatDateTime(dt) ?? string.Empty;
                 sb.Append('"');
                 sb.Append(display.Replace("\\", "\\\\").Replace("\"", "\\\""));
@@ -743,75 +711,21 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 return;
             }
 
-            // Other string-like values: quoted
-            var text = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+            var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
             sb.Append('"');
             sb.Append(text.Replace("\\", "\\\\").Replace("\"", "\\\""));
             sb.Append('"');
         }
 
-        List<IList<object>> GetSelectedRawRows()
-        {
-            var rows = new List<IList<object>>();
-            if (lastResult == null || lastResult.Values == null) return rows;
-
-            foreach (ListViewItem item in listView.Items)
-            {
-                if (!item.Selected) continue;
-
-                IList<object> raw = null;
-                if (item.SubItems.Count > 1)
-                    raw = item.SubItems[1].Tag as IList<object>;
-
-                if (raw == null)
-                {
-                    var index = item.Index;
-                    if (index >= 0 && index < lastResult.Values.Count)
-                        raw = lastResult.Values[index];
-                }
-
-                if (raw != null) rows.Add(raw);
-            }
-
-            return rows;
-        }
-
-        void CopyColumn()
-        {
-            try
-            {
-                var columnIndex = selectedColumnIndex >= 0 ? selectedColumnIndex : contextColumnIndex;
-                if (columnIndex < 0 || columnIndex >= listView.Columns.Count) return;
-                if (listView.Items.Count == 0) return;
-
-                var wholeColumn = selectedColumnIndex >= 0;
-                var sb = new StringBuilder();
-                var first = true;
-
-                foreach (ListViewItem item in listView.Items)
-                {
-                    if (!wholeColumn && !item.Selected) continue;
-                    if (!first) sb.AppendLine();
-                    first = false;
-                    if (columnIndex < item.SubItems.Count)
-                        sb.Append(item.SubItems[columnIndex].Text);
-                }
-
-                SetClipboardText(sb.ToString());
-            }
-            catch (Exception ex)
-            {
-                AppForm.DisplayException(ex);
-            }
-        }
-
         static void SetClipboardText(string text)
         {
             if (text == null) text = string.Empty;
-
             try
             {
-                Clipboard.SetText(text);
+                if (text.Length == 0)
+                    Clipboard.Clear();
+                else
+                    Clipboard.SetText(text);
             }
             catch
             {
