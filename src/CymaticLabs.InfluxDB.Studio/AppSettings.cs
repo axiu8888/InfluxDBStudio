@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -115,8 +116,12 @@ namespace CymaticLabs.InfluxDB.Studio
             get
             {
                 var time = Regex.Replace(TimeFormat ?? string.Empty, @"\.(f+|S+)", string.Empty, RegexOptions.IgnoreCase).Trim();
-                if (string.IsNullOrEmpty(time)) return DateFormat;
-                return (DateFormat + " " + time).Trim();
+                string combined;
+                if (string.IsNullOrEmpty(time))
+                    combined = DateFormat;
+                else
+                    combined = (DateFormat + " " + time).Trim();
+                return EscapeDateSeparators(ToDotNetDateTimeFormat(combined));
             }
         }
 
@@ -212,12 +217,14 @@ namespace CymaticLabs.InfluxDB.Studio
             var local = ToLocalDisplayTime(value);
             try
             {
-                var format = ToDotNetDateTimeFormat(DateTimeFormat);
+                var format = ToDotNetDateTimeFormat(EscapeDateSeparators(DateTimeFormat));
+                if (string.IsNullOrWhiteSpace(format))
+                    format = "yyyy-MM-dd HH:mm:ss";
                 return local.ToString(format, CultureInfo.InvariantCulture);
             }
             catch
             {
-                return local.ToString(CultureInfo.InvariantCulture);
+                return local.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
             }
         }
 
@@ -231,7 +238,7 @@ namespace CymaticLabs.InfluxDB.Studio
             DateTime dt;
             if (TryGetDateTime(value, out dt))
                 return FormatDateTime(dt);
-            return value.ToString();
+            return Convert.ToString(value, CultureInfo.InvariantCulture);
         }
 
         /// <summary>
@@ -275,9 +282,16 @@ namespace CymaticLabs.InfluxDB.Studio
                 return true;
             }
 
+            // Do NOT treat bare integers/longs as Unix timestamps here:
+            // measurement fields (memory_mb, uptime_sec, process_count, etc.) are often ints
+            // and would be wrongly converted to 1970-... dates.
+
             var text = value as string;
             if (string.IsNullOrWhiteSpace(text) || !LooksLikeTimestamp(text))
                 return false;
+
+            // Truncate >7 fractional digits so .NET Framework can parse Influx RFC3339 nano times.
+            text = TruncateFractionalSeconds(text);
 
             DateTimeOffset dto;
             if (DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture,
@@ -295,6 +309,48 @@ namespace CymaticLabs.InfluxDB.Studio
             if (text.Length < 19) return false;
             if (text.IndexOf('T') >= 0) return true;
             return text.Length >= 10 && text[4] == '-' && text[7] == '-';
+        }
+
+        /// <summary>
+        /// In custom DateTime formats, '/' is the culture date separator. Quote it so Settings
+        /// patterns like yyyy/MM/dd always render literal slashes with InvariantCulture.
+        /// </summary>
+        public static string EscapeDateSeparators(string format)
+        {
+            if (string.IsNullOrEmpty(format)) return format;
+            var sb = new StringBuilder(format.Length * 2);
+            var inQuote = false;
+            for (var i = 0; i < format.Length; i++)
+            {
+                var c = format[i];
+                if (c == '\'')
+                {
+                    inQuote = !inQuote;
+                    sb.Append(c);
+                    continue;
+                }
+                if (!inQuote && c == '/')
+                {
+                    sb.Append("'/'");
+                    continue;
+                }
+                sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
+        static string TruncateFractionalSeconds(string text)
+        {
+            var dot = text.IndexOf('.');
+            if (dot < 0) return text;
+
+            var end = dot + 1;
+            while (end < text.Length && char.IsDigit(text[end])) end++;
+            var fracLen = end - dot - 1;
+            if (fracLen <= 7) return text;
+
+            // Keep 7 digits (100ns resolution) + remainder suffix (Z or offset).
+            return text.Substring(0, dot + 1 + 7) + text.Substring(end);
         }
 
         /// <summary>

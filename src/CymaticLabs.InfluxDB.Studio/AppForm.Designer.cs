@@ -102,6 +102,7 @@
             this.databaseRefreshToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.newQueryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.importLineProtocolToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.exportMeasurementsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.retentionPoliciesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.viewRetentionPoliciesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.createRetentionPolicyToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -798,12 +799,13 @@
             this.databaseRefreshToolStripMenuItem,
             this.newQueryToolStripMenuItem,
             this.importLineProtocolToolStripMenuItem,
+            this.exportMeasurementsToolStripMenuItem,
             this.retentionPoliciesToolStripMenuItem,
             this.continousQueriesToolStripMenuItem,
             this.backFillToolStripMenuItem,
             this.dropDatabaseToolStripMenuItem});
             this.databaseContextMenu.Name = "databaseContextMenu";
-            this.databaseContextMenu.Size = new System.Drawing.Size(205, 158);
+            this.databaseContextMenu.Size = new System.Drawing.Size(220, 180);
             // 
             // databaseRefreshToolStripMenuItem
             // 
@@ -824,9 +826,16 @@
             // importLineProtocolToolStripMenuItem
             // 
             this.importLineProtocolToolStripMenuItem.Name = "importLineProtocolToolStripMenuItem";
-            this.importLineProtocolToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
+            this.importLineProtocolToolStripMenuItem.Size = new System.Drawing.Size(219, 22);
             this.importLineProtocolToolStripMenuItem.Text = "Import Line Protocol...";
             this.importLineProtocolToolStripMenuItem.Click += new System.EventHandler(this.importLineProtocolToolStripMenuItem_Click);
+            // 
+            // exportMeasurementsToolStripMenuItem
+            // 
+            this.exportMeasurementsToolStripMenuItem.Name = "exportMeasurementsToolStripMenuItem";
+            this.exportMeasurementsToolStripMenuItem.Size = new System.Drawing.Size(219, 22);
+            this.exportMeasurementsToolStripMenuItem.Text = "Export Measurements...";
+            this.exportMeasurementsToolStripMenuItem.Click += new System.EventHandler(this.exportMeasurementsToolStripMenuItem_Click);
             // 
             // retentionPoliciesToolStripMenuItem
             // 
@@ -1081,6 +1090,7 @@
         private System.Windows.Forms.ToolStripMenuItem databaseRefreshToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem dropDatabaseToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem importLineProtocolToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem exportMeasurementsToolStripMenuItem;
         private System.Windows.Forms.ContextMenuStrip measurementContextMenu;
         private System.Windows.Forms.ToolStripMenuItem importLineProtocolMeasurementToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem dropMeasurementToolStripMenuItem;

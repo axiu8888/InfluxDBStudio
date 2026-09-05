@@ -1,14 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using InfluxData.Net.InfluxDb.Enums;
 using InfluxData.Net.Common.Enums;
 using InfluxData.Net.InfluxDb.Models;
 using InfluxData.Net.InfluxDb.Models.Responses;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace CymaticLabs.InfluxDB.Data
 {
@@ -350,6 +354,231 @@ namespace CymaticLabs.InfluxDB.Data
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Streams query results using InfluxDB HTTP chunked responses (<c>chunked=true</c>).
+        /// </summary>
+        public async override Task QueryChunkedAsync(
+            string database,
+            string query,
+            int chunkSize,
+            Func<IList<InfluxDbSeries>, CancellationToken, Task> onChunk,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(database)) throw new ArgumentNullException("database");
+            if (string.IsNullOrWhiteSpace(query)) throw new ArgumentNullException("query");
+            if (onChunk == null) throw new ArgumentNullException("onChunk");
+            if (chunkSize <= 0) chunkSize = 10000;
+
+            var baseUrl = Connection.HttpConnectionString.TrimEnd('/');
+            var url = new StringBuilder();
+            url.Append(baseUrl);
+            url.Append("/query?db=");
+            url.Append(Uri.EscapeDataString(database));
+            url.Append("&q=");
+            url.Append(Uri.EscapeDataString(query));
+            url.Append("&chunked=true");
+            url.Append("&chunk_size=");
+            url.Append(chunkSize.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+            if (!string.IsNullOrEmpty(Connection.Username))
+            {
+                url.Append("&u=");
+                url.Append(Uri.EscapeDataString(Connection.Username));
+            }
+
+            if (!string.IsNullOrEmpty(Connection.Password))
+            {
+                url.Append("&p=");
+                url.Append(Uri.EscapeDataString(Connection.Password));
+            }
+
+            using (var http = new HttpClient())
+            {
+                // Streaming large exports can take a long time.
+                http.Timeout = Timeout.InfiniteTimeSpan;
+
+                using (var response = await http.GetAsync(
+                    url.ToString(),
+                    HttpCompletionOption.ResponseHeadersRead,
+                    cancellationToken).ConfigureAwait(false))
+                {
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var errBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        throw new InvalidOperationException(string.IsNullOrWhiteSpace(errBody)
+                            ? response.ReasonPhrase
+                            : errBody);
+                    }
+
+                    using (var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
+                    using (var reader = new StreamReader(stream, Encoding.UTF8))
+                    {
+                        foreach (var json in ReadJsonObjects(reader))
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+
+                            var seriesList = ParseChunkedQueryJson(json);
+                            if (seriesList == null || seriesList.Count == 0) continue;
+
+                            await onChunk(seriesList, cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reads consecutive top-level JSON objects from a chunked InfluxDB response stream.
+        /// </summary>
+        static IEnumerable<string> ReadJsonObjects(TextReader reader)
+        {
+            var sb = new StringBuilder();
+            var depth = 0;
+            var inString = false;
+            var escape = false;
+
+            while (true)
+            {
+                var next = reader.Read();
+                if (next < 0) break;
+
+                var ch = (char)next;
+
+                if (depth == 0)
+                {
+                    if (char.IsWhiteSpace(ch)) continue;
+                    if (ch != '{')
+                        throw new InvalidOperationException("Unexpected character in chunked query response.");
+                }
+
+                sb.Append(ch);
+
+                if (inString)
+                {
+                    if (escape)
+                    {
+                        escape = false;
+                    }
+                    else if (ch == '\\')
+                    {
+                        escape = true;
+                    }
+                    else if (ch == '"')
+                    {
+                        inString = false;
+                    }
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    inString = true;
+                    continue;
+                }
+
+                if (ch == '{') depth++;
+                else if (ch == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        yield return sb.ToString();
+                        sb.Clear();
+                    }
+                }
+            }
+
+            if (sb.Length > 0)
+                throw new InvalidOperationException("Incomplete JSON in chunked query response.");
+        }
+
+        static IList<InfluxDbSeries> ParseChunkedQueryJson(string json)
+        {
+            // Keep ISO time strings as strings so AppSettings.FormatDateTime can apply the user's format.
+            // Default JObject.Parse would coerce them to DateTime and later ToString() uses culture (e.g. 2026/9/4).
+            JObject root;
+            using (var sr = new StringReader(json))
+            using (var reader = new JsonTextReader(sr))
+            {
+                reader.DateParseHandling = DateParseHandling.None;
+                root = JObject.Load(reader);
+            }
+
+            // Top-level error
+            var topError = root["error"];
+            if (topError != null && topError.Type == JTokenType.String)
+                throw new InvalidOperationException(topError.Value<string>());
+
+            var results = root["results"] as JArray;
+            if (results == null || results.Count == 0) return new List<InfluxDbSeries>();
+
+            var seriesList = new List<InfluxDbSeries>();
+
+            foreach (var result in results)
+            {
+                var resultError = result["error"];
+                if (resultError != null && resultError.Type == JTokenType.String)
+                    throw new InvalidOperationException(resultError.Value<string>());
+
+                var seriesArray = result["series"] as JArray;
+                if (seriesArray == null) continue;
+
+                foreach (var seriesToken in seriesArray)
+                {
+                    var name = seriesToken["name"] != null ? seriesToken["name"].Value<string>() : null;
+                    var columnsToken = seriesToken["columns"] as JArray;
+                    var valuesToken = seriesToken["values"] as JArray;
+                    if (columnsToken == null || valuesToken == null) continue;
+
+                    var columns = new List<string>(columnsToken.Count);
+                    foreach (var col in columnsToken)
+                        columns.Add(col.Type == JTokenType.Null ? null : col.Value<string>());
+
+                    var tags = new Dictionary<string, string>();
+                    var tagsToken = seriesToken["tags"] as JObject;
+                    if (tagsToken != null)
+                    {
+                        foreach (var prop in tagsToken.Properties())
+                            tags[prop.Name] = prop.Value != null && prop.Value.Type != JTokenType.Null
+                                ? prop.Value.ToString()
+                                : null;
+                    }
+
+                    var values = new List<IList<object>>(valuesToken.Count);
+                    foreach (var rowToken in valuesToken)
+                    {
+                        var rowArray = rowToken as JArray;
+                        if (rowArray == null) continue;
+                        var row = new List<object>(rowArray.Count);
+                        foreach (var cell in rowArray)
+                            row.Add(ConvertJsonCell(cell));
+                        values.Add(row);
+                    }
+
+                    seriesList.Add(new InfluxDbSeries(name, columns, tags, values));
+                }
+            }
+
+            return seriesList;
+        }
+
+        static object ConvertJsonCell(JToken cell)
+        {
+            if (cell == null || cell.Type == JTokenType.Null) return null;
+            if (cell.Type == JTokenType.Integer) return cell.Value<long>();
+            if (cell.Type == JTokenType.Float) return cell.Value<double>();
+            if (cell.Type == JTokenType.Boolean) return cell.Value<bool>();
+            if (cell.Type == JTokenType.String) return cell.Value<string>();
+            if (cell.Type == JTokenType.Date)
+            {
+                var dt = cell.Value<DateTime>();
+                if (dt.Kind == DateTimeKind.Unspecified)
+                    dt = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+                return dt;
+            }
+            return cell.ToString();
         }
 
         /// <summary>

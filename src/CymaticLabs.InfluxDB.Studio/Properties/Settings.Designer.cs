@@ -106,5 +106,17 @@ namespace CymaticLabs.InfluxDB.Studio.Properties {
                 this["QueryHistoryJson"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string LastMeasurementExportDirectory {
+            get {
+                return ((string)(this["LastMeasurementExportDirectory"]));
+            }
+            set {
+                this["LastMeasurementExportDirectory"] = value;
+            }
+        }
     }
 }

@@ -108,7 +108,7 @@ namespace CymaticLabs.InfluxDB.Studio
             if (label.Length > 64) label = label.Substring(0, 61) + "...";
 
             if (includeTime)
-                label = item.Timestamp.ToString("yyyy-MM-dd HH:mm:ss") + "  " + label;
+                label = AppForm.Settings.FormatDateTime(item.Timestamp) + "  " + label;
 
             return label;
         }

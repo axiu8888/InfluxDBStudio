@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace CymaticLabs.InfluxDB.Data
@@ -188,6 +189,22 @@ namespace CymaticLabs.InfluxDB.Data
         /// <param name="query">The query to execute.</param>
         /// <returns>The result of the query.</returns>
         public abstract Task<IEnumerable<InfluxDbSeries>> QueryAsync(string database, string query);
+
+        /// <summary>
+        /// Executes a chunked (streaming) query. Each chunk of series is passed to <paramref name="onChunk"/>
+        /// as it arrives from the server (InfluxDB <c>chunked=true</c> / <c>chunk_size</c>).
+        /// </summary>
+        /// <param name="database">The database to query.</param>
+        /// <param name="query">The InfluxQL query.</param>
+        /// <param name="chunkSize">Max points per chunk (default 10000 when &lt;= 0).</param>
+        /// <param name="onChunk">Callback invoked for each chunk of series.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        public abstract Task QueryChunkedAsync(
+            string database,
+            string query,
+            int chunkSize,
+            Func<IList<InfluxDbSeries>, CancellationToken, Task> onChunk,
+            CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the continuous queries for a given database.

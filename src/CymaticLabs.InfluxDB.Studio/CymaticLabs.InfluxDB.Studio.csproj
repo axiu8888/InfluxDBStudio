@@ -215,6 +215,10 @@
     <Compile Include="Dialogs\ImportLineProtocolDialog.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Dialogs\ExportMeasurementsDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Controls\MeasurementBatchExport.cs" />
     <Compile Include="Dialogs\SavedQueryDialog.cs">
       <SubType>Form</SubType>
     </Compile>

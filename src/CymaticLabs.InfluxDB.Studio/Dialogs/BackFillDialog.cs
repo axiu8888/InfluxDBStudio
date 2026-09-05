@@ -132,8 +132,10 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             fillTypeComboBox.SelectedIndex = 0;
             tagsTextBox.Text = null;
 
-            // Reset time/date format
+            // Reset time/date format from global Settings
             var dateTimeFormat = AppForm.Settings.DateTimePickerFormat;
+            fromDateTimePicker.Format = DateTimePickerFormat.Custom;
+            toDateTimePicker.Format = DateTimePickerFormat.Custom;
             fromDateTimePicker.CustomFormat = dateTimeFormat;
             toDateTimePicker.CustomFormat = dateTimeFormat;
 
