@@ -134,7 +134,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 // Create a new query results control
                 var queryResultsControl = new QueryResultsControl();
                 queryResultsControl.InfluxDbClient = InfluxDbClient;
-                //queryResultsControl.Database = Database;
+                queryResultsControl.AllowLineProtocolExport = false;
                 queryResultsControl.Dock = DockStyle.Fill;
                 tab.Controls.Add(queryResultsControl);
 

@@ -345,6 +345,8 @@ namespace CymaticLabs.InfluxDB.Studio
                 { "  (LIMIT {0} OFFSET {1} added automatically)", "  （已自动加上 LIMIT {0} OFFSET {1}）" },
                 { "Beautify SQL (multiple lines)", "美化 SQL（多行）" },
                 { "Compact SQL (one line)", "压缩 SQL（单行）" },
+                { "Run SQL", "运行 SQL" },
+                { "Run Selected SQL", "运行选中 SQL" },
                 { "Add to Favorites...", "添加到收藏..." },
                 { "Add to Favorites", "添加到收藏" },
                 { "Favorites", "收藏" },

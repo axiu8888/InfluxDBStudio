@@ -38,6 +38,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         ToolStripMenuItem addFavoriteMenuItem;
         ToolStripMenuItem favoritesMenuItem;
         ToolStripMenuItem historyMenuItem;
+        ToolStripMenuItem runSqlMenuItem;
+        ToolStripMenuItem runSelectedSqlMenuItem;
         ToolTip savedQueryToolTip;
         ToolStripDropDown savedQueryToolTipOwner;
 
@@ -109,6 +111,22 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 e.SuppressKeyPress = true;
                 e.Handled = true;
                 BeginShowAutocomplete(true);
+                return;
+            }
+
+            if (e.KeyCode == Keys.F5 && !e.Control && !e.Alt && !e.Shift)
+            {
+                e.SuppressKeyPress = true;
+                e.Handled = true;
+                BeginExecuteQuery(false);
+                return;
+            }
+
+            if (e.Control && e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                e.Handled = true;
+                BeginExecuteQuery(true);
             }
         }
 
@@ -149,6 +167,16 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             ApplyFormattedSql(InfluxQlFormatter.FormatCompact);
         }
 
+        void runSqlMenuItem_Click(object sender, EventArgs e)
+        {
+            BeginExecuteQuery(false);
+        }
+
+        void runSelectedSqlMenuItem_Click(object sender, EventArgs e)
+        {
+            BeginExecuteQuery(true);
+        }
+
         #endregion Event Handlers
 
         #region Methods
@@ -158,6 +186,12 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             queryEditor.UsePopup(false);
 
             var menu = new ContextMenuStrip();
+
+            runSqlMenuItem = new ToolStripMenuItem("Run SQL") { ShortcutKeys = Keys.F5 };
+            runSqlMenuItem.Click += runSqlMenuItem_Click;
+            runSelectedSqlMenuItem = new ToolStripMenuItem("Run Selected SQL") { ShortcutKeys = Keys.Control | Keys.Enter };
+            runSelectedSqlMenuItem.Click += runSelectedSqlMenuItem_Click;
+
             var beautify = new ToolStripMenuItem("Beautify SQL (multiple lines)");
             beautify.Click += formatPrettyMenuItem_Click;
             var compact = new ToolStripMenuItem("Compact SQL (one line)");
@@ -178,6 +212,9 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             var paste = new ToolStripMenuItem("Paste", null, (s, e) => queryEditor.Paste()) { ShortcutKeys = Keys.Control | Keys.V };
             var selectAll = new ToolStripMenuItem("Select All", null, (s, e) => queryEditor.SelectAll()) { ShortcutKeys = Keys.Control | Keys.A };
 
+            menu.Items.Add(runSqlMenuItem);
+            menu.Items.Add(runSelectedSqlMenuItem);
+            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(beautify);
             menu.Items.Add(compact);
             menu.Items.Add(new ToolStripSeparator());
@@ -196,6 +233,9 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 HideSavedQueryToolTip();
                 var hasText = queryEditor.TextLength > 0;
                 var hasSelection = queryEditor.SelectionStart != queryEditor.SelectionEnd;
+                var hasSelectedSql = !string.IsNullOrWhiteSpace(queryEditor.SelectedText);
+                runSqlMenuItem.Enabled = hasText;
+                runSelectedSqlMenuItem.Enabled = hasSelectedSql;
                 beautify.Enabled = hasText;
                 compact.Enabled = hasText;
                 cut.Enabled = hasSelection;
@@ -631,21 +671,48 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             }
         }
 
+        async void BeginExecuteQuery(bool selectedOnly)
+        {
+            await ExecuteQuerySafeAsync(selectedOnly);
+        }
+
+        async Task ExecuteQuerySafeAsync(bool selectedOnly)
+        {
+            try
+            {
+                await ExecuteQueryAsync(selectedOnly);
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
         /// <summary>
         /// Runs the current query against the configured connection and database.
         /// </summary>
         public override async Task ExecuteRequestAsync()
+        {
+            await ExecuteQueryAsync(false);
+        }
+
+        /// <summary>
+        /// Runs either the whole editor SQL or only the current selection.
+        /// </summary>
+        public async Task ExecuteQueryAsync(bool selectedOnly)
         {
             if (InfluxDbClient == null) throw new Exception("No InfluxDB client available.");
 
             // Reset the results count
             resultsCount = 0;
 
-            // Get the database and the query
-            var query = EditorText.Trim();
+            var query = selectedOnly ? queryEditor.SelectedText : EditorText;
+            if (string.IsNullOrWhiteSpace(query)) return;
+            query = query.Trim();
+
             bool addedLimit, addedOffset;
             var autoPaged = InfluxDbHelper.TryEnsureSelectQueryPaging(query, out query, out addedLimit, out addedOffset);
-            if (autoPaged) EditorText = query;
+            if (autoPaged && !selectedOnly) EditorText = query;
 
             QueryLibrary.AddHistory(query);
 

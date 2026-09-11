@@ -20,6 +20,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         // Dialog used to create new continuous queries
         private CreateContinuousQueryDialog createCqDialog;
 
+        QueryResultsControl resultsGrid;
+
         #endregion Fields
 
         #region Properties
@@ -36,6 +38,11 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public ContinuousQueryControl()
         {
             InitializeComponent();
+            resultsGrid = QueryResultsControl.Replace(listView, false);
+            resultsGrid.MultiSelect = false;
+            resultsGrid.SelectedRowChanged += resultsGrid_SelectedRowChanged;
+            resultsGrid.RowDoubleClick += resultsGrid_RowDoubleClick;
+            resultsGrid.PrependContextItems(createCQToolStripMenuItem, editCQToolStripMenuItem, dropCQToolStripMenuItem);
             Localization.Apply(this);
 
             createCqDialog = new CreateContinuousQueryDialog();
@@ -77,52 +84,20 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             await RunBackFill();
         }
 
-        // Select the list item under the cursor so right-click edit/drop targets it
-        private void listView_MouseDown(object sender, MouseEventArgs e)
-        {
-            if (e.Button != MouseButtons.Right) return;
-
-            var hit = listView.HitTest(e.Location);
-            if (hit.Item == null) return;
-
-            if (!hit.Item.Selected)
-            {
-                listView.SelectedItems.Clear();
-                hit.Item.Selected = true;
-            }
-
-            hit.Item.Focused = true;
-        }
-
-        // Double-click a CQ to edit it
-        private async void listView_DoubleClick(object sender, EventArgs e)
+        private async void resultsGrid_RowDoubleClick(object sender, EventArgs e)
         {
             await EditContinuousQuery();
         }
 
-        // Handles selection of CQ in list view
-        private void listView_SelectedIndexChanged(object sender, EventArgs e)
+        private void resultsGrid_SelectedRowChanged(object sender, EventArgs e)
         {
             try
             {
-                if (listView.SelectedItems.Count == 0)
-                {
-                    SelectedCq = null;
+                SelectedCq = resultsGrid.SelectedRowTag as InfluxDbContinuousQuery;
 
-                    // Clear query text
-                    queryEditor.ReadOnly = false;
-                    queryEditor.Text = null;
-                    queryEditor.ReadOnly = true;
-                }
-                else
-                {
-                    // Populate query text
-                    SelectedCq = listView.SelectedItems[0].Tag as InfluxDbContinuousQuery;
-
-                    queryEditor.ReadOnly = false;
-                    queryEditor.Text = FormatCqQuery(SelectedCq.Query);
-                    queryEditor.ReadOnly = true;
-                }
+                queryEditor.ReadOnly = false;
+                queryEditor.Text = SelectedCq != null ? FormatCqQuery(SelectedCq.Query) : null;
+                queryEditor.ReadOnly = true;
 
                 UpdateUIState();
             }
@@ -302,7 +277,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         // Updates the UI state
         void UpdateUIState()
         {
-            var hasSelection = listView.SelectedItems.Count == 1;
+            var hasSelection = resultsGrid.SelectedRowCount == 1 && SelectedCq != null;
             editCqButton.Enabled = hasSelection;
             editCQToolStripMenuItem.Enabled = hasSelection;
             dropCqButton.Enabled = hasSelection;
@@ -372,35 +347,36 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             try
             {
-                // Clear current UI
-                listView.Items.Clear();
+                resultsGrid.InfluxDbClient = InfluxDbClient;
+                resultsGrid.Database = Database;
+                resultsGrid.ExportFileNameStem = Database + "_cqs";
+                resultsGrid.ClearResults();
                 queryEditor.ReadOnly = false;
                 queryEditor.Text = null;
                 queryEditor.ReadOnly = true;
 
                 if (string.IsNullOrEmpty(Database)) return;
 
-                listView.BeginUpdate();
-
                 var cqList = await InfluxDbClient.GetContinousQueriesAsync(Database);
-
+                var columns = new[] { Localization.T("CQ Name") };
+                var values = new List<IList<object>>();
+                var tags = new List<object>();
                 foreach (var cq in cqList)
                 {
-                    listView.Items.Add(new ListViewItem(new string[] { cq.Name }) { Tag = cq });
+                    values.Add(new object[] { cq.Name });
+                    tags.Add(cq);
                 }
 
-                listView.EndUpdate();
+                resultsGrid.UpdateTable("cqs", columns, values, tags);
 
-                // If this is/was a currently selected query, restore it
                 if (SelectedCq != null)
                 {
-                    foreach (ListViewItem li in listView.Items)
+                    var selectedName = SelectedCq.Name;
+                    resultsGrid.SelectFirstRowWhere(tag =>
                     {
-                        if (li.Text == SelectedCq.Name)
-                        {
-                            li.Selected = true;
-                        }
-                    }
+                        var cq = tag as InfluxDbContinuousQuery;
+                        return cq != null && cq.Name == selectedName;
+                    });
                 }
             }
             catch (Exception ex)

@@ -34,20 +34,12 @@
             this.toolStrip1.SuspendLayout();
             this.SuspendLayout();
             // 
-            // listView
-            // 
-            this.listView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.listView.Dock = System.Windows.Forms.DockStyle.None;
-            this.listView.Location = new System.Drawing.Point(0, 28);
-            this.listView.Size = new System.Drawing.Size(773, 449);
-            // 
             // toolStrip1
             // 
             this.toolStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tagKeysLabel,
             this.tagKeysComboBox});
+            this.toolStrip1.Dock = System.Windows.Forms.DockStyle.Top;
             this.toolStrip1.Location = new System.Drawing.Point(0, 0);
             this.toolStrip1.Name = "toolStrip1";
             this.toolStrip1.Size = new System.Drawing.Size(773, 25);
@@ -73,8 +65,6 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Controls.Add(this.toolStrip1);
             this.Name = "TagValuesControl";
-            this.Controls.SetChildIndex(this.listView, 0);
-            this.Controls.SetChildIndex(this.toolStrip1, 0);
             this.toolStrip1.ResumeLayout(false);
             this.toolStrip1.PerformLayout();
             this.ResumeLayout(false);

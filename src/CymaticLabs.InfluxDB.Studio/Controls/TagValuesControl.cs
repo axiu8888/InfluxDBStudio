@@ -1,30 +1,17 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using CymaticLabs.InfluxDB.Studio;
 
 namespace CymaticLabs.InfluxDB.Studio.Controls
 {
-    /// <summary>
-    /// Renders the tag values for a given measurement.
-    /// </summary>
     public partial class TagValuesControl : MeasurementControl
     {
-        #region Fields
-
-        #endregion Fields
-
-        #region Properties
-
         public override string ExportFileNameStem
         {
             get { return string.Format("tag_values_{0}", tagKeysComboBox.SelectedItem as string); }
         }
-
-        #endregion Properties
-
-        #region Constructors
 
         public TagValuesControl()
         {
@@ -32,26 +19,15 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             Localization.Apply(this);
         }
 
-        #endregion Constructors
-
-        #region Event Handlers
-
-        // Handle changes to tag key
         private async void tagKeysComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
             await ExecuteRequestAsync();
         }
 
-        #endregion Event Handlers
-
-        #region Methods
-
         protected async override Task OnExecuteQuery()
         {
-            // Fetch tag keys if the drop down has not yet been populated
             if (tagKeysComboBox.Items.Count == 0)
             {
-                // Get the current list of tag keys for the measurement
                 var tagKeys = await InfluxDbClient.GetTagKeysAsync(Database, Measurement);
 
                 if (tagKeys != null && tagKeys.Count() > 0)
@@ -66,35 +42,25 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             }
         }
 
-        // Queries tag values for the selected tag key and displays them
         async Task BindTagValues()
         {
-            // Clear the current items
-            listView.Items.Clear();
+            resultsGrid.ClearResults();
+            resultsGrid.ExportFileNameStem = string.Format("{0}_{1}", Measurement, ExportFileNameStem);
 
-            // Get the values for the current tag key
             var selectedTag = tagKeysComboBox.SelectedItem as string;
+            if (selectedTag == null) return;
 
-            if (selectedTag != null)
+            var tagValues = await InfluxDbClient.GetTagValuesAsync(Database, Measurement, selectedTag);
+            var columns = new[] { Localization.T("tagValue") };
+            var values = new List<IList<object>>();
+            var tags = new List<object>();
+            foreach (var tv in tagValues)
             {
-                var tagValues = await InfluxDbClient.GetTagValuesAsync(Database, Measurement, selectedTag);
-
-                // Add default row count column
-                listView.Columns.Add(new ColumnHeader() { Text = Localization.T("#") });
-
-                // Add tag value column
-                listView.Columns.Add(new ColumnHeader() { Text = Localization.T("tagValue") });
-
-                // Add each value to the list
-                var rowCount = 0;
-
-                foreach (var tv in tagValues)
-                {
-                    listView.Items.Add(new ListViewItem(new string[] { (++rowCount).ToString(), tv.Value }) { Tag = tv });
-                }
+                values.Add(new object[] { tv.Value });
+                tags.Add(tv);
             }
-        }
 
-        #endregion Methods
+            resultsGrid.UpdateTable("tag_values", columns, values, tags);
+        }
     }
 }

@@ -35,7 +35,6 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Name = "SeriesControl";
-            this.Controls.SetChildIndex(this.listView, 0);
             this.ResumeLayout(false);
 
         }

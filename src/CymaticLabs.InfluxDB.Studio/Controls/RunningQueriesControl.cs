@@ -26,6 +26,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         /// </summary>
         public InfluxDbRunningQuery SelectedQuery { get; private set; }
 
+        QueryResultsControl resultsGrid;
+
         #endregion Properties
 
         #region Constructors
@@ -33,6 +35,9 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public RunningQueriesControl()
         {
             InitializeComponent();
+            resultsGrid = QueryResultsControl.Replace(listView, false);
+            resultsGrid.SelectedRowChanged += resultsGrid_SelectedRowChanged;
+            resultsGrid.PrependContextItems(killQueryToolStripMenuItem);
             Localization.Apply(this);
 
             // Set query editor styles, InfluxDB is SQL like, so use those
@@ -47,24 +52,13 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         #region Event Handlers
 
         // Handle query selection change
-        private void listView_SelectedIndexChanged(object sender, EventArgs e)
+        private void resultsGrid_SelectedRowChanged(object sender, EventArgs e)
         {
-            if (listView.SelectedItems.Count == 0)
-            {
-                queryEditor.ReadOnly = false;
-                queryEditor.Text = null;
-                queryEditor.ReadOnly = true;
-                killQueryButton.Enabled = killQueryToolStripMenuItem.Enabled = false;
-                SelectedQuery = null;
-            }
-            else
-            {
-                SelectedQuery = (InfluxDbRunningQuery)listView.SelectedItems[0].Tag;
-                queryEditor.ReadOnly = false;
-                queryEditor.Text = SelectedQuery.Query;
-                queryEditor.ReadOnly = true;
-                killQueryButton.Enabled = killQueryToolStripMenuItem.Enabled = true;
-            }
+            SelectedQuery = resultsGrid.SelectedRowTag as InfluxDbRunningQuery;
+            queryEditor.ReadOnly = false;
+            queryEditor.Text = SelectedQuery != null ? SelectedQuery.Query : null;
+            queryEditor.ReadOnly = true;
+            UpdateUIState();
         }
 
         // Handle kill query
@@ -89,8 +83,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             try
             {
-                if (listView.SelectedItems.Count == 0) return;
-                var pid = ((InfluxDbRunningQuery)listView.SelectedItems[0].Tag).PID;
+                if (SelectedQuery == null) return;
+                var pid = SelectedQuery.PID;
                 var response = await InfluxDbClient.KillQueryAsync(pid);
 
                 if (!response.Success && !response.Body.Contains("query interrupted"))
@@ -99,9 +93,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 }
                 else
                 {
-                    listView.BeginUpdate();
-                    listView.SelectedItems[0].Remove();
-                    listView.EndUpdate();
+                    await ExecuteRequestAsync();
                 }
 
                 UpdateUIState();
@@ -118,7 +110,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
 
         void UpdateUIState()
         {
-            killQueryButton.Enabled = killQueryToolStripMenuItem.Enabled = listView.SelectedItems.Count > 0;
+            killQueryButton.Enabled = killQueryToolStripMenuItem.Enabled = SelectedQuery != null;
         }
 
         #endregion User Interface
@@ -127,51 +119,44 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             if (InfluxDbClient == null) throw new Exception("No InfluxDB client available.");
 
-            // Clear current items
-            listView.Items.Clear();
+            resultsGrid.InfluxDbClient = InfluxDbClient;
+            resultsGrid.ExportFileNameStem = "running_queries";
+            resultsGrid.AllowLineProtocolExport = false;
 
-            // Start redraw
-            listView.BeginUpdate();
-
-            // Query and render
             var queries = await InfluxDbClient.GetRunningQueriesAsync();
+            var columns = new[]
+            {
+                Localization.T("PID"),
+                Localization.T("Duration"),
+                Localization.T("Database"),
+                Localization.T("Query")
+            };
 
+            var values = new List<IList<object>>();
+            var tags = new List<object>();
             foreach (var q in queries)
             {
-                listView.Items.Add(new ListViewItem(new string[]
+                values.Add(new object[]
                 {
                     q.PID.ToString(),
                     q.Duration,
-                    q.Database.ToString(),
+                    q.Database,
                     q.Query
-                }) { Tag = q });
+                });
+                tags.Add(q);
             }
 
-            // Restore selection
+            resultsGrid.UpdateTable("queries", columns, values, tags);
+
             if (SelectedQuery != null)
             {
-                var pid = SelectedQuery.PID.ToString();
-
-                foreach (ListViewItem li in listView.Items)
+                var pid = SelectedQuery.PID;
+                resultsGrid.SelectFirstRowWhere(tag =>
                 {
-                    if (li.Text == pid)
-                    {
-                        li.Selected = true;
-                        SelectedQuery = (InfluxDbRunningQuery)li.Tag;
-                    }
-                }
+                    var query = tag as InfluxDbRunningQuery;
+                    return query != null && query.PID == pid;
+                });
             }
-
-            // Resize each column
-            //if (listView.Columns.Count > 0)
-            //{
-            //    var columnWidth = (Width - 12) / listView.Columns.Count;
-            //    if (columnWidth < 96) columnWidth = 96;
-            //    foreach (ColumnHeader col in listView.Columns) col.Width = columnWidth;
-            //}
-
-            // Render
-            listView.EndUpdate();
 
             UpdateUIState();
         }

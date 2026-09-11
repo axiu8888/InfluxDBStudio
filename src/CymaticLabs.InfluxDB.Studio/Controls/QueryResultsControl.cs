@@ -21,6 +21,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
 
         int resultsCount = 0;
         InfluxDbSeries lastResult;
+        bool allowLineProtocolExport = true;
 
         // Anchor for Shift+click column/row header ranges (Excel-like).
         int anchorColumnIndex = -1;
@@ -32,6 +33,56 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
 
         public InfluxDbClient InfluxDbClient { get; set; }
         public string Database { get; set; }
+
+        /// <summary>
+        /// Optional export file name stem (without extension). When empty, connection + database is used.
+        /// </summary>
+        public string ExportFileNameStem { get; set; }
+
+        /// <summary>
+        /// When false, Line Protocol export items are hidden (schema / SHOW results).
+        /// </summary>
+        public bool AllowLineProtocolExport
+        {
+            get { return allowLineProtocolExport; }
+            set
+            {
+                allowLineProtocolExport = value;
+                if (exportAllLineProtocolToolStripMenuItem != null)
+                    exportAllLineProtocolToolStripMenuItem.Visible = value;
+                if (exportSelectedLineProtocolToolStripMenuItem != null)
+                    exportSelectedLineProtocolToolStripMenuItem.Visible = value;
+            }
+        }
+
+        public int RowCount
+        {
+            get { return dataGridView.Rows.Count; }
+        }
+
+        public int SelectedRowCount
+        {
+            get { return GetSelectedRowIndexes().Count; }
+        }
+
+        public object SelectedRowTag
+        {
+            get
+            {
+                var indexes = GetSelectedRowIndexes();
+                if (indexes.Count == 0) return null;
+                return dataGridView.Rows[indexes[0]].Tag;
+            }
+        }
+
+        public event EventHandler SelectedRowChanged;
+        public event EventHandler RowDoubleClick;
+
+        public bool MultiSelect
+        {
+            get { return dataGridView.MultiSelect; }
+            set { dataGridView.MultiSelect = value; }
+        }
 
         #endregion Properties
 
@@ -47,6 +98,9 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             dataGridView.RowHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             dataGridView.DefaultCellStyle.SelectionBackColor = SystemColors.Highlight;
             dataGridView.DefaultCellStyle.SelectionForeColor = SystemColors.HighlightText;
+
+            dataGridView.SelectionChanged += dataGridView_SelectionChanged;
+            dataGridView.CellDoubleClick += dataGridView_CellDoubleClick;
         }
 
         #endregion Constructors
@@ -226,9 +280,82 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             CopyAllHeaders();
         }
 
+        void dataGridView_SelectionChanged(object sender, EventArgs e)
+        {
+            if (SelectedRowChanged != null)
+                SelectedRowChanged(this, EventArgs.Empty);
+        }
+
+        void dataGridView_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0) return;
+            if (RowDoubleClick != null)
+                RowDoubleClick(this, EventArgs.Empty);
+        }
+
         #endregion Event Handlers
 
         #region Methods
+
+        /// <summary>
+        /// Replaces an existing child control (typically a ListView) with a results grid.
+        /// </summary>
+        public static QueryResultsControl Replace(Control existing, bool allowLineProtocolExport = false)
+        {
+            if (existing == null) throw new ArgumentNullException("existing");
+            var parent = existing.Parent;
+            if (parent == null) throw new InvalidOperationException("Control has no parent.");
+
+            var grid = new QueryResultsControl
+            {
+                Dock = existing.Dock,
+                Anchor = existing.Anchor,
+                AllowLineProtocolExport = allowLineProtocolExport
+            };
+            if (existing.Dock == DockStyle.None)
+                grid.Bounds = existing.Bounds;
+
+            var index = parent.Controls.GetChildIndex(existing);
+            parent.Controls.Remove(existing);
+            parent.Controls.Add(grid);
+            parent.Controls.SetChildIndex(grid, index);
+            return grid;
+        }
+
+        public void PrependContextItems(params ToolStripItem[] items)
+        {
+            if (items == null || items.Length == 0) return;
+            contextMenuStrip.Items.Insert(0, new ToolStripSeparator());
+            for (var i = items.Length - 1; i >= 0; i--)
+            {
+                if (items[i] != null)
+                    contextMenuStrip.Items.Insert(0, items[i]);
+            }
+        }
+
+        public void SelectFirstRowWhere(Predicate<object> match)
+        {
+            if (match == null) return;
+            dataGridView.ClearSelection();
+            for (var r = 0; r < dataGridView.Rows.Count; r++)
+            {
+                if (match(dataGridView.Rows[r].Tag))
+                {
+                    SelectEntireRow(r, true);
+                    if (dataGridView.Rows[r].Cells.Count > 1)
+                        dataGridView.CurrentCell = dataGridView[1, r];
+                    break;
+                }
+            }
+        }
+
+        public void UpdateTable(string name, IList<string> columns, IList<IList<object>> values, IList<object> rowTags = null)
+        {
+            if (columns == null) throw new ArgumentNullException("columns");
+            if (values == null) throw new ArgumentNullException("values");
+            var series = new InfluxDbSeries(name ?? string.Empty, columns, new Dictionary<string, string>(), values);
+            UpdateResults(series, true, rowTags);
+        }
 
         public void ClearResults()
         {
@@ -241,6 +368,11 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         }
 
         public int UpdateResults(InfluxDbSeries result, bool clear = false)
+        {
+            return UpdateResults(result, clear, null);
+        }
+
+        public int UpdateResults(InfluxDbSeries result, bool clear, IList<object> rowTags)
         {
             if (result == null) throw new ArgumentNullException("result");
 
@@ -290,7 +422,10 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                     values[x + 1] = AppForm.Settings.FormatValue(raw[x]);
 
                 var index = dataGridView.Rows.Add(values);
-                dataGridView.Rows[index].Tag = raw;
+                if (rowTags != null && i < rowTags.Count)
+                    dataGridView.Rows[index].Tag = rowTags[i];
+                else
+                    dataGridView.Rows[index].Tag = raw;
             }
 
             dataGridView.ResumeLayout();
@@ -348,7 +483,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             try
             {
-                saveFileDialog.FileName = string.Format("{0}.csv", InfluxDbClient.Connection.Name + "_" + Database);
+                saveFileDialog.FileName = string.Format("{0}.csv", GetExportBaseName());
                 saveFileDialog.Filter = Localization.T("CSV files|*.csv|All files|*.*");
                 if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
 
@@ -388,7 +523,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             try
             {
-                saveFileDialog.FileName = string.Format("{0}.xlsx", InfluxDbClient.Connection.Name + "_" + Database);
+                saveFileDialog.FileName = string.Format("{0}.xlsx", GetExportBaseName());
                 saveFileDialog.Filter = Localization.T("Excel files|*.xlsx|All files|*.*");
                 if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
 
@@ -422,7 +557,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             try
             {
-                saveFileDialog.FileName = string.Format("{0}.json", InfluxDbClient.Connection.Name + "_" + Database);
+                saveFileDialog.FileName = string.Format("{0}.json", GetExportBaseName());
                 saveFileDialog.Filter = Localization.T("JSON files|*.json|All files|*.*");
                 if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
 
@@ -440,6 +575,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             try
             {
                 if (lastResult == null) return;
+                if (!allowLineProtocolExport) return;
 
                 if (string.IsNullOrWhiteSpace(lastResult.Name))
                 {
@@ -448,7 +584,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                     return;
                 }
 
-                saveFileDialog.FileName = string.Format("{0}.lp", InfluxDbClient.Connection.Name + "_" + Database);
+                saveFileDialog.FileName = string.Format("{0}.lp", GetExportBaseName());
                 saveFileDialog.Filter = Localization.T("Line Protocol files|*.lp|All files|*.*");
                 if (saveFileDialog.ShowDialog() != DialogResult.OK) return;
 
@@ -731,6 +867,18 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             {
                 Clipboard.SetDataObject(text, true);
             }
+        }
+
+        string GetExportBaseName()
+        {
+            if (!string.IsNullOrWhiteSpace(ExportFileNameStem))
+                return ExportFileNameStem;
+
+            var conn = InfluxDbClient != null && InfluxDbClient.Connection != null
+                ? InfluxDbClient.Connection.Name
+                : "export";
+            var db = string.IsNullOrWhiteSpace(Database) ? "results" : Database;
+            return conn + "_" + db;
         }
 
         #endregion Methods

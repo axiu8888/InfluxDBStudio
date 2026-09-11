@@ -80,14 +80,12 @@
             this.exportAllCsvToolStripMenuItem.Name = "exportAllCsvToolStripMenuItem";
             this.exportAllCsvToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
             this.exportAllCsvToolStripMenuItem.Text = "CSV";
-            this.exportAllCsvToolStripMenuItem.Click += new System.EventHandler(this.exportAllCsvToolStripMenuItem_Click);
             // 
             // exportAllExcelToolStripMenuItem
             // 
             this.exportAllExcelToolStripMenuItem.Name = "exportAllExcelToolStripMenuItem";
             this.exportAllExcelToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
             this.exportAllExcelToolStripMenuItem.Text = "Excel";
-            this.exportAllExcelToolStripMenuItem.Click += new System.EventHandler(this.exportAllExcelToolStripMenuItem_Click);
             // 
             // exportSelectedToolStripMenuItem
             // 
@@ -104,28 +102,24 @@
             this.exportSelectedCsvToolStripMenuItem.Name = "exportSelectedCsvToolStripMenuItem";
             this.exportSelectedCsvToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
             this.exportSelectedCsvToolStripMenuItem.Text = "CSV";
-            this.exportSelectedCsvToolStripMenuItem.Click += new System.EventHandler(this.exportSelectedCsvToolStripMenuItem_Click);
             // 
             // exportSelectedExcelToolStripMenuItem
             // 
             this.exportSelectedExcelToolStripMenuItem.Name = "exportSelectedExcelToolStripMenuItem";
             this.exportSelectedExcelToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
             this.exportSelectedExcelToolStripMenuItem.Text = "Excel";
-            this.exportSelectedExcelToolStripMenuItem.Click += new System.EventHandler(this.exportSelectedExcelToolStripMenuItem_Click);
             // 
             // exportAllJsonMenuItem
             // 
             this.exportAllJsonMenuItem.Name = "exportAllJsonMenuItem";
             this.exportAllJsonMenuItem.Size = new System.Drawing.Size(152, 22);
             this.exportAllJsonMenuItem.Text = "JSON";
-            this.exportAllJsonMenuItem.Click += new System.EventHandler(this.exportAllJsonMenuItem_Click);
             // 
             // exportSelectedJsonMenuItem
             // 
             this.exportSelectedJsonMenuItem.Name = "exportSelectedJsonMenuItem";
             this.exportSelectedJsonMenuItem.Size = new System.Drawing.Size(152, 22);
             this.exportSelectedJsonMenuItem.Text = "JSON";
-            this.exportSelectedJsonMenuItem.Click += new System.EventHandler(this.exportSelectedJsonMenuItem_Click);
             // 
             // MeasurementControl
             // 

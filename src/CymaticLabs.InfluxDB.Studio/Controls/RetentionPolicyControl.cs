@@ -22,6 +22,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         // Used for creating new retention policies
         RetentionPolicyDialog policyDialog;
 
+        QueryResultsControl resultsGrid;
+
         #endregion Fields
 
         #region Properties
@@ -43,6 +45,9 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         public RetentionPolicyControl()
         {
             InitializeComponent();
+            resultsGrid = QueryResultsControl.Replace(listView, false);
+            resultsGrid.SelectedRowChanged += resultsGrid_SelectedRowChanged;
+            resultsGrid.PrependContextItems(createPolicyToolStripMenuItem, alterPolicyToolStripMenuItem, dropPolicyToolStripMenuItem);
             Localization.Apply(this);
             policyDialog = new RetentionPolicyDialog();
         }
@@ -60,17 +65,9 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         }
 
         // Handle changes to the selected policy
-        private void listView_SelectedIndexChanged(object sender, EventArgs e)
+        private void resultsGrid_SelectedRowChanged(object sender, EventArgs e)
         {
-            if (listView.SelectedItems.Count == 0)
-            {
-                SelectedRetentionPolicy = null;
-            }
-            else
-            {
-                SelectedRetentionPolicy = listView.SelectedItems[0].Tag as InfluxDbRetentionPolicy;
-            }
-
+            SelectedRetentionPolicy = resultsGrid.SelectedRowTag as InfluxDbRetentionPolicy;
             UpdateUIState();
         }
 
@@ -268,8 +265,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         // Updates the UI state based on current selections
         void UpdateUIState()
         {
-            alterButton.Enabled = alterPolicyToolStripMenuItem.Enabled = listView.SelectedItems.Count > 0;
-            dropButton.Enabled = dropPolicyToolStripMenuItem.Enabled = listView.Items.Count > 1 && listView.SelectedItems.Count > 0;
+            alterButton.Enabled = alterPolicyToolStripMenuItem.Enabled = resultsGrid.SelectedRowCount > 0;
+            dropButton.Enabled = dropPolicyToolStripMenuItem.Enabled = resultsGrid.RowCount > 1 && resultsGrid.SelectedRowCount > 0;
         }
 
         #endregion User Interface
@@ -283,7 +280,9 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             if (InfluxDbClient == null) throw new Exception("No InfluxDB client available.");
 
-            listView.Items.Clear();
+            resultsGrid.InfluxDbClient = InfluxDbClient;
+            resultsGrid.Database = Database;
+            resultsGrid.AllowLineProtocolExport = false;
             databaseComboBox.Visible = false;
             toolStripSeparator1.Visible = false;
 
@@ -297,42 +296,46 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         // Binds retention policies for the current database
         async Task BindSelectedPolicy()
         {
-            listView.Items.Clear();
             if (string.IsNullOrWhiteSpace(SelectedDatabase)) return;
 
-            listView.BeginUpdate();
-
+            resultsGrid.ExportFileNameStem = SelectedDatabase + "_policies";
             policies = await InfluxDbClient.GetRetentionPoliciesAsync(SelectedDatabase);
 
+            var columns = new[]
+            {
+                Localization.T("Policy Name"),
+                Localization.T("Duration"),
+                Localization.T("Shard Group Duration"),
+                Localization.T("Replica N"),
+                Localization.T("Default")
+            };
+
+            var values = new List<IList<object>>();
+            var tags = new List<object>();
             foreach (var rp in policies)
             {
-                var li = new ListViewItem(new string[]
+                values.Add(new object[]
                 {
                     rp.Name,
                     rp.Duration,
                     rp.ShardGroupDuration,
                     rp.ReplicationCopies.ToString(),
                     rp.Default ? CheckMark : null
-                })
-                { Tag = rp };
-
-                listView.Items.Add(li);
+                });
+                tags.Add(rp);
             }
 
-            // Select current policy if any
+            resultsGrid.UpdateTable("policies", columns, values, tags);
+
             if (SelectedRetentionPolicy != null)
             {
-                foreach (ListViewItem li in listView.Items)
+                var selectedName = SelectedRetentionPolicy.Name;
+                resultsGrid.SelectFirstRowWhere(tag =>
                 {
-                    if (li.Text == SelectedRetentionPolicy.Name)
-                    {
-                        li.Selected = true;
-                        break;
-                    }
-                }
+                    var policy = tag as InfluxDbRetentionPolicy;
+                    return policy != null && policy.Name == selectedName;
+                });
             }
-
-            listView.EndUpdate();
 
             UpdateUIState();
         }

@@ -152,9 +152,6 @@
             this.listView.MultiSelect = false;
             this.listView.UseCompatibleStateImageBehavior = false;
             this.listView.View = System.Windows.Forms.View.Details;
-            this.listView.SelectedIndexChanged += new System.EventHandler(this.listView_SelectedIndexChanged);
-            this.listView.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listView_MouseDown);
-            this.listView.DoubleClick += new System.EventHandler(this.listView_DoubleClick);
             // 
             // columnHeader
             // 
