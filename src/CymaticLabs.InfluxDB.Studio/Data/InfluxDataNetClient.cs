@@ -345,15 +345,24 @@ namespace CymaticLabs.InfluxDB.Data
             if (string.IsNullOrWhiteSpace(database)) throw new ArgumentNullException("database");
             if (string.IsNullOrWhiteSpace(query)) throw new ArgumentNullException("query");
 
-            var response = await influx.Client.QueryAsync(query, database).ConfigureAwait(false);
-            var results = new List<InfluxDbSeries>(response.Count());
-
-            foreach (var r in response)
+            // Parse with DateParseHandling.None so string fields (save_time, etc.) stay strings.
+            // InfluxData.Net / default JSON.NET would coerce RFC3339-looking values to DateTime.
+            var url = BuildQueryUrl(database, query, chunked: false, chunkSize: 0);
+            using (var http = new HttpClient())
             {
-                results.Add(new InfluxDbSeries(r.Name, r.Columns, r.Tags, r.Values));
+                http.Timeout = Timeout.InfiniteTimeSpan;
+                using (var response = await http.GetAsync(url).ConfigureAwait(false))
+                {
+                    var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        throw new InvalidOperationException(string.IsNullOrWhiteSpace(body)
+                            ? response.ReasonPhrase
+                            : body);
+                    }
+                    return ParseChunkedQueryJson(body);
+                }
             }
-
-            return results;
         }
 
         /// <summary>
@@ -371,28 +380,7 @@ namespace CymaticLabs.InfluxDB.Data
             if (onChunk == null) throw new ArgumentNullException("onChunk");
             if (chunkSize <= 0) chunkSize = 10000;
 
-            var baseUrl = Connection.HttpConnectionString.TrimEnd('/');
-            var url = new StringBuilder();
-            url.Append(baseUrl);
-            url.Append("/query?db=");
-            url.Append(Uri.EscapeDataString(database));
-            url.Append("&q=");
-            url.Append(Uri.EscapeDataString(query));
-            url.Append("&chunked=true");
-            url.Append("&chunk_size=");
-            url.Append(chunkSize.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-            if (!string.IsNullOrEmpty(Connection.Username))
-            {
-                url.Append("&u=");
-                url.Append(Uri.EscapeDataString(Connection.Username));
-            }
-
-            if (!string.IsNullOrEmpty(Connection.Password))
-            {
-                url.Append("&p=");
-                url.Append(Uri.EscapeDataString(Connection.Password));
-            }
+            var url = BuildQueryUrl(database, query, chunked: true, chunkSize: chunkSize);
 
             using (var http = new HttpClient())
             {
@@ -400,7 +388,7 @@ namespace CymaticLabs.InfluxDB.Data
                 http.Timeout = Timeout.InfiniteTimeSpan;
 
                 using (var response = await http.GetAsync(
-                    url.ToString(),
+                    url,
                     HttpCompletionOption.ResponseHeadersRead,
                     cancellationToken).ConfigureAwait(false))
                 {
@@ -427,6 +415,37 @@ namespace CymaticLabs.InfluxDB.Data
                     }
                 }
             }
+        }
+
+        string BuildQueryUrl(string database, string query, bool chunked, int chunkSize)
+        {
+            var url = new StringBuilder();
+            url.Append(Connection.HttpConnectionString.TrimEnd('/'));
+            url.Append("/query?db=");
+            url.Append(Uri.EscapeDataString(database));
+            url.Append("&q=");
+            url.Append(Uri.EscapeDataString(query));
+
+            if (chunked)
+            {
+                url.Append("&chunked=true");
+                url.Append("&chunk_size=");
+                url.Append(chunkSize.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            if (!string.IsNullOrEmpty(Connection.Username))
+            {
+                url.Append("&u=");
+                url.Append(Uri.EscapeDataString(Connection.Username));
+            }
+
+            if (!string.IsNullOrEmpty(Connection.Password))
+            {
+                url.Append("&p=");
+                url.Append(Uri.EscapeDataString(Connection.Password));
+            }
+
+            return url.ToString();
         }
 
         /// <summary>
@@ -552,8 +571,11 @@ namespace CymaticLabs.InfluxDB.Data
                         var rowArray = rowToken as JArray;
                         if (rowArray == null) continue;
                         var row = new List<object>(rowArray.Count);
-                        foreach (var cell in rowArray)
-                            row.Add(ConvertJsonCell(cell));
+                        for (var i = 0; i < rowArray.Count; i++)
+                        {
+                            var columnName = i < columns.Count ? columns[i] : null;
+                            row.Add(ConvertJsonCell(rowArray[i], columnName));
+                        }
                         values.Add(row);
                     }
 
@@ -564,19 +586,25 @@ namespace CymaticLabs.InfluxDB.Data
             return seriesList;
         }
 
-        static object ConvertJsonCell(JToken cell)
+        static object ConvertJsonCell(JToken cell, string columnName)
         {
             if (cell == null || cell.Type == JTokenType.Null) return null;
             if (cell.Type == JTokenType.Integer) return cell.Value<long>();
             if (cell.Type == JTokenType.Float) return cell.Value<double>();
             if (cell.Type == JTokenType.Boolean) return cell.Value<bool>();
+            // String fields (save_time, device_time, ...) stay exactly as Influx returned them.
             if (cell.Type == JTokenType.String) return cell.Value<string>();
             if (cell.Type == JTokenType.Date)
             {
-                var dt = cell.Value<DateTime>();
-                if (dt.Kind == DateTimeKind.Unspecified)
-                    dt = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-                return dt;
+                // Only the reserved Influx column "time" is a real timestamp.
+                if (string.Equals(columnName, "time", StringComparison.OrdinalIgnoreCase))
+                {
+                    var dt = cell.Value<DateTime>();
+                    if (dt.Kind == DateTimeKind.Unspecified)
+                        dt = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+                    return dt;
+                }
+                return cell.ToString();
             }
             return cell.ToString();
         }

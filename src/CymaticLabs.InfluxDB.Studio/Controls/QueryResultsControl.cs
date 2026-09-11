@@ -419,7 +419,10 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 values[0] = (++resultsCount).ToString(CultureInfo.InvariantCulture);
 
                 for (var x = 0; x < raw.Count && x + 1 < values.Length; x++)
-                    values[x + 1] = AppForm.Settings.FormatValue(raw[x]);
+                {
+                    var columnName = x < result.Columns.Count ? result.Columns[x] : null;
+                    values[x + 1] = AppForm.Settings.FormatValue(raw[x], columnName);
+                }
 
                 var index = dataGridView.Rows.Add(values);
                 if (rowTags != null && i < rowTags.Count)
@@ -781,7 +784,10 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
         {
             var d = new Dictionary<string, object>();
             for (var i = 0; i < row.Count && i < lastResult.Columns.Count; i++)
-                d[lastResult.Columns[i]] = AppForm.Settings.ToLocalExportValue(row[i]);
+            {
+                var columnName = lastResult.Columns[i];
+                d[columnName] = AppForm.Settings.ToLocalExportValue(row[i], columnName);
+            }
             return d;
         }
 
@@ -817,11 +823,11 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 first = false;
                 sb.Append(lastResult.Columns[i]);
                 sb.Append('=');
-                AppendKeyValueLiteral(sb, value);
+                AppendKeyValueLiteral(sb, value, lastResult.Columns[i]);
             }
         }
 
-        void AppendKeyValueLiteral(StringBuilder sb, object value)
+        void AppendKeyValueLiteral(StringBuilder sb, object value, string columnName)
         {
             if (value is bool)
             {
@@ -838,7 +844,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             }
 
             DateTime dt;
-            if (AppSettings.TryGetDateTime(value, out dt))
+            if (AppSettings.IsInfluxTimeColumn(columnName) && AppSettings.TryGetDateTime(value, out dt))
             {
                 var display = AppForm.Settings.FormatDateTime(dt) ?? string.Empty;
                 sb.Append('"');

@@ -337,7 +337,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 {
                     if (c > 0) sb.Append(',');
                     var val = c < row.Count ? row[c] : null;
-                    sb.Append(FormatCell(val));
+                    var columnName = c < series.Columns.Count ? series.Columns[c] : null;
+                    sb.Append(FormatCell(val, columnName));
                 }
                 writer.WriteLine(sb.ToString());
             }
@@ -351,7 +352,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 for (var i = 0; i < series.Columns.Count; i++)
                 {
                     var val = i < row.Count ? row[i] : null;
-                    d[series.Columns[i]] = AppForm.Settings.ToLocalExportValue(val);
+                    d[series.Columns[i]] = AppForm.Settings.ToLocalExportValue(val, series.Columns[i]);
                 }
                 rows.Add(d);
             }
@@ -382,7 +383,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 for (var c = 0; c < series.Columns.Count; c++)
                 {
                     var val = c < row.Count ? row[c] : null;
-                    cells.Add(FormatCell(val));
+                    var columnName = c < series.Columns.Count ? series.Columns[c] : null;
+                    cells.Add(FormatCell(val, columnName));
                 }
                 rows.Add(cells);
             }
@@ -411,10 +413,10 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             });
         }
 
-        static string FormatCell(object value)
+        static string FormatCell(object value, string columnName)
         {
             if (value == null) return string.Empty;
-            var formatted = AppForm.Settings.FormatValue(value);
+            var formatted = AppForm.Settings.FormatValue(value, columnName);
             return formatted ?? string.Empty;
         }
 

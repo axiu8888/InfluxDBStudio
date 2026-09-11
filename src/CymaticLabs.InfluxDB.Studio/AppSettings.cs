@@ -229,27 +229,43 @@ namespace CymaticLabs.InfluxDB.Studio
         }
 
         /// <summary>
-        /// Formats a cell value, applying the current date/time format when the value is a timestamp.
-        /// InfluxDB timestamps are UTC and are converted to the local time zone for display.
+        /// Formats a cell value. Timezone conversion applies only to the reserved Influx column
+        /// named exactly <c>time</c>. User fields such as <c>save_time</c> or <c>device_time</c>
+        /// are returned as stored — they are not parsed as timestamps.
         /// </summary>
-        public string FormatValue(object value)
+        public string FormatValue(object value, string columnName = null)
         {
             if (value == null) return null;
-            DateTime dt;
-            if (TryGetDateTime(value, out dt))
-                return FormatDateTime(dt);
+            if (IsInfluxTimeColumn(columnName))
+            {
+                DateTime dt;
+                if (TryGetDateTime(value, out dt))
+                    return FormatDateTime(dt);
+            }
             return Convert.ToString(value, CultureInfo.InvariantCulture);
         }
 
         /// <summary>
-        /// Formats a value for JSON / clipboard export so timestamps match the query list display.
+        /// Formats a value for JSON / clipboard export so the <c>time</c> column matches the query list.
         /// </summary>
-        public object ToLocalExportValue(object value)
+        public object ToLocalExportValue(object value, string columnName = null)
         {
-            DateTime dt;
-            if (TryGetDateTime(value, out dt))
-                return FormatDateTime(dt);
+            if (IsInfluxTimeColumn(columnName))
+            {
+                DateTime dt;
+                if (TryGetDateTime(value, out dt))
+                    return FormatDateTime(dt);
+            }
             return value;
+        }
+
+        /// <summary>
+        /// True only for Influx's reserved point timestamp column <c>time</c>.
+        /// Names like <c>save_time</c> or <c>device_time</c> are not matched.
+        /// </summary>
+        public static bool IsInfluxTimeColumn(string columnName)
+        {
+            return string.Equals(columnName, "time", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
