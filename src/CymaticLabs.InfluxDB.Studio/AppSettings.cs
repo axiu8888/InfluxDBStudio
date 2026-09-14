@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
@@ -403,50 +404,86 @@ namespace CymaticLabs.InfluxDB.Studio
         }
 
         /// <summary>
-        /// Loads all connections data from disk.
+        /// Path to the portable connections file (same folder as the exe).
         /// </summary>
-        public void LoadConnections()
+        public static string ConnectionsFilePath
         {
-            var json = Properties.Settings.Default.ConnectionsJson;
-            var loadedConnections = Newtonsoft.Json.JsonConvert.DeserializeObject(json);
-            Connections = new List<InfluxDbConnection>();
-
-            if (loadedConnections is JArray)
-            {
-                var array = (JArray)loadedConnections;
-
-                foreach (var item in array)
-                {
-                    try
-                    {
-                        // Convert to connection object
-                        var connection = item.ToObject<InfluxDbConnection>();
-                        if (connection != null) Connections.Add(connection);
-                    }
-                    catch (Exception ex)
-                    {
-                        AppForm.DisplayException(ex);
-                    }
-                }
-            }
+            get { return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "connections.json"); }
         }
 
         /// <summary>
-        /// Saves current connection data to disk.
+        /// Loads all connections from <c>connections.json</c> next to the executable.
+        /// If the file is missing, migrates once from the legacy user.config setting.
         /// </summary>
-        public void SaveConnections()
+        public void LoadConnections()
         {
+            Connections = new List<InfluxDbConnection>();
+
             try
             {
-                // Save to disk
-                var json = JsonConvert.SerializeObject(Connections);
-                Properties.Settings.Default.ConnectionsJson = json;
-                Properties.Settings.Default.Save();
+                var path = ConnectionsFilePath;
+                if (File.Exists(path))
+                {
+                    var json = File.ReadAllText(path, Encoding.UTF8);
+                    Connections = ParseConnectionsJson(json);
+                    return;
+                }
+
+                // One-time migration from Properties.Settings (path-scoped user.config).
+                var legacy = Properties.Settings.Default.ConnectionsJson;
+                if (!string.IsNullOrWhiteSpace(legacy))
+                {
+                    Connections = ParseConnectionsJson(legacy);
+                    if (Connections.Count > 0)
+                        SaveConnections();
+                }
             }
             catch (Exception ex)
             {
                 AppForm.DisplayException(ex);
             }
+        }
+
+        /// <summary>
+        /// Saves current connection data to <c>connections.json</c> next to the executable.
+        /// </summary>
+        public void SaveConnections()
+        {
+            try
+            {
+                var path = ConnectionsFilePath;
+                var json = JsonConvert.SerializeObject(Connections, Formatting.Indented);
+                File.WriteAllText(path, json, Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
+        static List<InfluxDbConnection> ParseConnectionsJson(string json)
+        {
+            var list = new List<InfluxDbConnection>();
+            if (string.IsNullOrWhiteSpace(json)) return list;
+
+            var loaded = JsonConvert.DeserializeObject(json);
+            var array = loaded as JArray;
+            if (array == null) return list;
+
+            foreach (var item in array)
+            {
+                try
+                {
+                    var connection = item.ToObject<InfluxDbConnection>();
+                    if (connection != null) list.Add(connection);
+                }
+                catch (Exception ex)
+                {
+                    AppForm.DisplayException(ex);
+                }
+            }
+
+            return list;
         }
 
         #endregion Methods
