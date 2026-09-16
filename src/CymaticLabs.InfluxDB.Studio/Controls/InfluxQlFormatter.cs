@@ -9,6 +9,12 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
     /// </summary>
     static class InfluxQlFormatter
     {
+        /// <summary>
+        /// Parenthetical groups shorter than this stay on one line (including inner AND/OR).
+        /// Longer groups break across lines with indented content.
+        /// </summary>
+        const int MaxInlineParenLength = 72;
+
         static readonly HashSet<string> ClauseKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "SELECT", "FROM", "WHERE", "GROUP", "ORDER", "LIMIT", "INTO",
@@ -39,8 +45,12 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
 
         static string Join(IList<string> tokens, bool pretty)
         {
+            var expandParen = pretty ? ComputeExpandParen(tokens) : null;
             var sb = new StringBuilder();
             string previous = null;
+            var parenDepth = 0;
+            // At each paren depth, whether the opening group was expanded.
+            var expandStack = new Stack<bool>();
 
             for (var i = 0; i < tokens.Count; i++)
             {
@@ -64,11 +74,48 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                     continue;
                 }
 
+                if (pretty && token == "(")
+                {
+                    var expand = expandParen != null && expandParen[i];
+                    AppendOpenParen(sb, previous, expand);
+                    parenDepth++;
+                    expandStack.Push(expand);
+                    previous = token;
+                    continue;
+                }
+
+                if (pretty && token == ")")
+                {
+                    var expand = expandStack.Count > 0 && expandStack.Pop();
+                    parenDepth = Math.Max(0, parenDepth - 1);
+                    if (expand)
+                    {
+                        if (!EndsWithNewline(sb)) sb.AppendLine();
+                        AppendIndent(sb, parenDepth == 0 ? 1 : parenDepth + 1);
+                    }
+                    sb.Append(")");
+                    previous = token;
+                    continue;
+                }
+
                 if (pretty && (upper == "AND" || upper == "OR"))
                 {
-                    if (sb.Length > 0 && !EndsWithNewline(sb)) sb.AppendLine();
-                    sb.Append("    ");
-                    sb.Append(upper);
+                    var insideExpand = expandStack.Count > 0 && expandStack.Peek();
+                    var breakLine = parenDepth == 0 || insideExpand;
+
+                    if (breakLine)
+                    {
+                        if (sb.Length > 0 && !EndsWithNewline(sb)) sb.AppendLine();
+                        // Top-level WHERE predicates: 4 spaces.
+                        // Inside expanded (...): one more indent level than the open paren line.
+                        AppendIndent(sb, parenDepth == 0 ? 1 : parenDepth + 1);
+                        sb.Append(upper);
+                    }
+                    else
+                    {
+                        AppendWithSpacing(sb, previous, upper);
+                    }
+
                     previous = upper;
                     continue;
                 }
@@ -93,11 +140,125 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                     continue;
                 }
 
+                if (pretty && expandStack.Count > 0 && expandStack.Peek()
+                    && EndsWithNewline(sb) && token != ")")
+                {
+                    // First token after an expanded "(" — already indented by AppendOpenParen.
+                    AppendIndent(sb, parenDepth + 1);
+                }
+
                 AppendWithSpacing(sb, previous, token);
                 previous = token;
             }
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Marks each "(" token index that should break across multiple lines.
+        /// Computed right-to-left so nested groups are resolved first.
+        /// </summary>
+        static bool[] ComputeExpandParen(IList<string> tokens)
+        {
+            var expand = new bool[tokens.Count];
+            for (var i = tokens.Count - 1; i >= 0; i--)
+            {
+                if (tokens[i] != "(") continue;
+                expand[i] = ShouldExpandParen(tokens, i, expand);
+            }
+            return expand;
+        }
+
+        static bool ShouldExpandParen(IList<string> tokens, int openIndex, bool[] expand)
+        {
+            var closeIndex = FindMatchingClose(tokens, openIndex);
+            if (closeIndex < 0) return false;
+
+            // Nested expanded groups force the parent to expand.
+            for (var i = openIndex + 1; i < closeIndex; i++)
+            {
+                if (tokens[i] == "(" && expand[i]) return true;
+            }
+
+            // Function calls like now() / count(x) stay inline when short and have no AND/OR.
+            var hasBoolOp = false;
+            for (var i = openIndex + 1; i < closeIndex; i++)
+            {
+                var t = tokens[i];
+                if (t.Equals("AND", StringComparison.OrdinalIgnoreCase)
+                    || t.Equals("OR", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasBoolOp = true;
+                    break;
+                }
+            }
+
+            var compact = CompactRange(tokens, openIndex, closeIndex);
+            if (compact.Length > MaxInlineParenLength) return true;
+
+            // Short boolean groups stay on one line: (a = 1 OR b = 2)
+            // Longer boolean groups expand even if under the hard limit when they look heavy.
+            if (hasBoolOp && compact.Length > 48) return true;
+
+            return false;
+        }
+
+        static int FindMatchingClose(IList<string> tokens, int openIndex)
+        {
+            var depth = 0;
+            for (var i = openIndex; i < tokens.Count; i++)
+            {
+                if (tokens[i] == "(") depth++;
+                else if (tokens[i] == ")")
+                {
+                    depth--;
+                    if (depth == 0) return i;
+                }
+            }
+            return -1;
+        }
+
+        static string CompactRange(IList<string> tokens, int start, int endInclusive)
+        {
+            var sb = new StringBuilder();
+            string previous = null;
+            for (var i = start; i <= endInclusive; i++)
+            {
+                var token = Normalize(tokens[i]);
+                AppendWithSpacing(sb, previous, token);
+                previous = token;
+            }
+            return sb.ToString();
+        }
+
+        static void AppendOpenParen(StringBuilder sb, string previous, bool expand)
+        {
+            // Space before "(" unless it is a function call: name(...)
+            var functionCall = IsFunctionName(previous);
+            if (sb.Length > 0 && !EndsWithNewline(sb) && !functionCall)
+                sb.Append(' ');
+            else if (sb.Length > 0 && !EndsWithNewline(sb) && functionCall)
+            {
+                // no space
+            }
+
+            sb.Append('(');
+            if (expand)
+                sb.AppendLine();
+        }
+
+        static void AppendIndent(StringBuilder sb, int levels)
+        {
+            if (levels < 1) levels = 1;
+            for (var i = 0; i < levels; i++)
+                sb.Append("    ");
+        }
+
+        static bool IsFunctionName(string previous)
+        {
+            if (string.IsNullOrEmpty(previous)) return false;
+            if (UppercaseKeywords.Contains(previous)) return false;
+            return IsIdentifier(previous);
         }
 
         static bool IsClauseStart(IList<string> tokens, int index)
@@ -138,14 +299,18 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             if (token == "::" || previous == "::") { sb.Append(token); return; }
             if (token == "," || token == ")" || token == ";" || token == ".") { sb.Append(token); return; }
             if (previous == "(" || previous == ".") { sb.Append(token); return; }
-            if (token == "(" && IsIdentifier(previous)) { sb.Append(token); return; }
+
+            // Function call: identifier(  — no space. Keyword (: space was handled in AppendOpenParen for pretty.
+            if (token == "(" && IsFunctionName(previous)) { sb.Append(token); return; }
+            if (token == "(") { sb.Append(' ').Append(token); return; }
 
             sb.Append(' ').Append(token);
         }
 
         static bool EndsWithIndent(StringBuilder sb)
         {
-            return sb.Length >= 4 && sb[sb.Length - 1] == ' ' && sb[sb.Length - 2] == ' ';
+            return sb.Length >= 4 && sb[sb.Length - 1] == ' ' && sb[sb.Length - 2] == ' '
+                && sb[sb.Length - 3] == ' ' && sb[sb.Length - 4] == ' ';
         }
 
         static bool IsIdentifier(string token)
