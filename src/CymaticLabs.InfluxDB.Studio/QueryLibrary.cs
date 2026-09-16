@@ -98,6 +98,13 @@ namespace CymaticLabs.InfluxDB.Studio
             SaveHistory();
         }
 
+        public static void ClearHistory()
+        {
+            EnsureLoaded();
+            history.Clear();
+            SaveHistory();
+        }
+
         public static string GetDisplayText(SavedQuery item, bool includeTime)
         {
             if (item == null) return string.Empty;

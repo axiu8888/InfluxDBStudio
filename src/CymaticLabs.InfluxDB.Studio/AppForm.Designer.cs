@@ -103,6 +103,7 @@
             this.newQueryToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.importLineProtocolToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportMeasurementsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.deleteMeasurementsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.retentionPoliciesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.viewRetentionPoliciesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.createRetentionPolicyToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -800,12 +801,13 @@
             this.newQueryToolStripMenuItem,
             this.importLineProtocolToolStripMenuItem,
             this.exportMeasurementsToolStripMenuItem,
+            this.deleteMeasurementsToolStripMenuItem,
             this.retentionPoliciesToolStripMenuItem,
             this.continousQueriesToolStripMenuItem,
             this.backFillToolStripMenuItem,
             this.dropDatabaseToolStripMenuItem});
             this.databaseContextMenu.Name = "databaseContextMenu";
-            this.databaseContextMenu.Size = new System.Drawing.Size(220, 180);
+            this.databaseContextMenu.Size = new System.Drawing.Size(220, 202);
             // 
             // databaseRefreshToolStripMenuItem
             // 
@@ -836,6 +838,13 @@
             this.exportMeasurementsToolStripMenuItem.Size = new System.Drawing.Size(219, 22);
             this.exportMeasurementsToolStripMenuItem.Text = "Export Measurements...";
             this.exportMeasurementsToolStripMenuItem.Click += new System.EventHandler(this.exportMeasurementsToolStripMenuItem_Click);
+            // 
+            // deleteMeasurementsToolStripMenuItem
+            // 
+            this.deleteMeasurementsToolStripMenuItem.Name = "deleteMeasurementsToolStripMenuItem";
+            this.deleteMeasurementsToolStripMenuItem.Size = new System.Drawing.Size(219, 22);
+            this.deleteMeasurementsToolStripMenuItem.Text = "Delete Measurements...";
+            this.deleteMeasurementsToolStripMenuItem.Click += new System.EventHandler(this.deleteMeasurementsToolStripMenuItem_Click);
             // 
             // retentionPoliciesToolStripMenuItem
             // 
@@ -1091,6 +1100,7 @@
         private System.Windows.Forms.ToolStripMenuItem dropDatabaseToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem importLineProtocolToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exportMeasurementsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem deleteMeasurementsToolStripMenuItem;
         private System.Windows.Forms.ContextMenuStrip measurementContextMenu;
         private System.Windows.Forms.ToolStripMenuItem importLineProtocolMeasurementToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem dropMeasurementToolStripMenuItem;

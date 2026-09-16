@@ -422,6 +422,7 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
 
         /// <summary>
         /// Collapses multiline extra WHERE into a single InfluxQL predicate (newlines → spaces).
+        /// Strips a leading WHERE / AND / OR so users can paste fragments from existing queries.
         /// </summary>
         public static string NormalizeExtraWhere(string extraWhere)
         {
@@ -446,7 +447,31 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 lastWasSpace = false;
             }
 
-            return sb.ToString().Trim();
+            var normalized = sb.ToString().Trim();
+            normalized = StripLeadingBooleanKeyword(normalized);
+            return normalized;
+        }
+
+        /// <summary>
+        /// Removes a leading WHERE / AND / OR keyword (case-insensitive).
+        /// </summary>
+        static string StripLeadingBooleanKeyword(string predicate)
+        {
+            if (string.IsNullOrEmpty(predicate)) return predicate;
+
+            string[] prefixes = { "WHERE", "AND", "OR" };
+            foreach (var prefix in prefixes)
+            {
+                if (predicate.Length <= prefix.Length) continue;
+                if (!predicate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+
+                var next = predicate[prefix.Length];
+                if (!char.IsWhiteSpace(next) && next != '(') continue;
+
+                return predicate.Substring(prefix.Length).TrimStart();
+            }
+
+            return predicate;
         }
 
         static DateTime ToUtc(DateTime value)

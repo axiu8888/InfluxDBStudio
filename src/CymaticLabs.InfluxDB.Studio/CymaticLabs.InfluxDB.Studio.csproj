@@ -218,8 +218,15 @@
     <Compile Include="Dialogs\ExportMeasurementsDialog.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Dialogs\DeleteMeasurementsDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Controls\MeasurementBatchExport.cs" />
+    <Compile Include="Controls\MeasurementBatchDelete.cs" />
     <Compile Include="Dialogs\SavedQueryDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Dialogs\QueryHistoryDialog.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Dialogs\CreateContinuousQueryDialog.Designer.cs">

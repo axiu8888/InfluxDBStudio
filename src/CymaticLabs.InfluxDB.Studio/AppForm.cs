@@ -651,6 +651,14 @@ namespace CymaticLabs.InfluxDB.Studio
             await ExportMeasurements(node);
         }
 
+        // Database -> Delete Measurements
+        private async void deleteMeasurementsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            var node = connectionsTreeView.SelectedNode;
+            if (node == null) return;
+            await DeleteMeasurements(node);
+        }
+
         #endregion Database Context Menu
 
         #region Measurement Context Menu
@@ -1691,6 +1699,73 @@ namespace CymaticLabs.InfluxDB.Studio
                 }
 
                 using (var dialog = new ExportMeasurementsDialog(client, database, measurements, policies))
+                {
+                    dialog.ShowDialog(this);
+                }
+            }
+            catch (Exception ex)
+            {
+                DisplayException(ex);
+            }
+        }
+
+        // Database -> Delete Measurements (batch by WHERE / time range)
+        async Task DeleteMeasurements(TreeNode node)
+        {
+            try
+            {
+                var type = GetNodeType(node);
+                if (type != InfluxDbNodeTypes.Database)
+                    return;
+
+                var database = GetDatabaseName(node);
+                if (string.IsNullOrWhiteSpace(database))
+                {
+                    DisplayError(Localization.T("Database name cannot be blank."));
+                    return;
+                }
+
+                var connection = GetConnection(node);
+                if (connection == null)
+                {
+                    DisplayError(Localization.T("Connection not found."));
+                    return;
+                }
+
+                var client = GetClient(connection);
+                if (client == null)
+                {
+                    DisplayError(Localization.T("Connection not found."));
+                    return;
+                }
+
+                IEnumerable<string> measurements;
+                try
+                {
+                    measurements = await client.GetMeasurementNamesAsync(database);
+                }
+                catch (Exception ex)
+                {
+                    DisplayException(ex);
+                    return;
+                }
+
+                if (measurements == null || !measurements.Any())
+                {
+                    DisplayError(Localization.T("No measurements found in this database."));
+                    return;
+                }
+
+                IEnumerable<InfluxDbRetentionPolicy> policies = null;
+                try
+                {
+                    policies = await client.GetRetentionPoliciesAsync(database);
+                }
+                catch
+                {
+                }
+
+                using (var dialog = new DeleteMeasurementsDialog(client, database, measurements, policies))
                 {
                     dialog.ShowDialog(this);
                 }

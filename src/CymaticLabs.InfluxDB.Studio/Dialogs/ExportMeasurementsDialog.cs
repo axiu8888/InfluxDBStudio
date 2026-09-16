@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -36,6 +37,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
         readonly Button selectAllButton;
         readonly Button selectNoneButton;
         readonly Button browseButton;
+        readonly Button previewSqlButton;
         readonly Button exportButton;
         readonly Button cancelButton;
 
@@ -58,8 +60,8 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             MaximizeBox = true;
             ShowInTaskbar = false;
             ControlBox = true;
-            MinimumSize = new Size(560, 660);
-            ClientSize = new Size(620, 640);
+            MinimumSize = new Size(560, 680);
+            ClientSize = new Size(620, 660);
 
             var databaseLabel = new Label
             {
@@ -257,14 +259,23 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             {
                 AutoSize = false,
                 Location = new Point(12, 536),
-                Size = new Size(594, 40),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                Size = new Size(594, 36),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 Text = string.Empty
             };
 
+            previewSqlButton = new Button
+            {
+                Location = new Point(324, 580),
+                Size = new Size(100, 28),
+                Text = Localization.T("Preview SQL"),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+            };
+            previewSqlButton.Click += (s, e) => PreviewSqlButton_Click();
+
             exportButton = new Button
             {
-                Location = new Point(430, 592),
+                Location = new Point(430, 580),
                 Size = new Size(90, 28),
                 Text = Localization.T("Export"),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right
@@ -273,7 +284,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
 
             cancelButton = new Button
             {
-                Location = new Point(526, 592),
+                Location = new Point(526, 580),
                 Size = new Size(80, 28),
                 Text = Localization.T("Cancel"),
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right
@@ -309,6 +320,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             Controls.Add(outputDirTextBox);
             Controls.Add(browseButton);
             Controls.Add(progressLabel);
+            Controls.Add(previewSqlButton);
             Controls.Add(exportButton);
             Controls.Add(cancelButton);
 
@@ -431,6 +443,104 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             Close();
         }
 
+        void PreviewSqlButton_Click()
+        {
+            MeasurementBatchExport.Options options;
+            string error;
+            if (!TryBuildOptions(out options, out error, requireExportTargets: false))
+            {
+                MessageBox.Show(this, error, Localization.T("Preview SQL"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var sb = new StringBuilder();
+            for (var i = 0; i < options.Measurements.Count; i++)
+            {
+                if (i > 0) sb.AppendLine().AppendLine();
+                sb.Append(MeasurementBatchExport.BuildQuery(
+                    options.Measurements[i],
+                    options.RetentionPolicyName,
+                    options.FromLocal,
+                    options.ToLocal,
+                    options.ExtraWhere,
+                    options.Limit));
+                sb.Append(';');
+            }
+
+            using (var dialog = new Form())
+            {
+                dialog.Text = Localization.T("Preview SQL");
+                dialog.FormBorderStyle = FormBorderStyle.Sizable;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.MinimizeBox = false;
+                dialog.MaximizeBox = true;
+                dialog.ShowInTaskbar = false;
+                dialog.MinimumSize = new Size(560, 320);
+                dialog.ClientSize = new Size(680, 420);
+
+                var sqlBox = new TextBox
+                {
+                    Multiline = true,
+                    ReadOnly = true,
+                    ScrollBars = ScrollBars.Both,
+                    WordWrap = false,
+                    Font = new Font("Consolas", 9.75f),
+                    Dock = DockStyle.Fill,
+                    Text = sb.ToString()
+                };
+
+                var buttonPanel = new Panel
+                {
+                    Dock = DockStyle.Bottom,
+                    Height = 44
+                };
+
+                var copyButton = new Button
+                {
+                    Text = Localization.T("Copy"),
+                    Size = new Size(80, 28),
+                    Location = new Point(480, 8),
+                    Anchor = AnchorStyles.Right | AnchorStyles.Top
+                };
+                copyButton.Click += (s, e) =>
+                {
+                    try
+                    {
+                        Clipboard.SetText(sqlBox.Text ?? string.Empty);
+                    }
+                    catch
+                    {
+                        Clipboard.SetDataObject(sqlBox.Text ?? string.Empty, true);
+                    }
+                };
+
+                var closeButton = new Button
+                {
+                    Text = Localization.T("Close"),
+                    DialogResult = DialogResult.OK,
+                    Size = new Size(80, 28),
+                    Location = new Point(566, 8),
+                    Anchor = AnchorStyles.Right | AnchorStyles.Top
+                };
+
+                buttonPanel.Resize += (s, e) =>
+                {
+                    closeButton.Left = buttonPanel.ClientSize.Width - closeButton.Width - 12;
+                    copyButton.Left = closeButton.Left - copyButton.Width - 6;
+                };
+
+                buttonPanel.Controls.Add(copyButton);
+                buttonPanel.Controls.Add(closeButton);
+                dialog.Controls.Add(sqlBox);
+                dialog.Controls.Add(buttonPanel);
+                dialog.AcceptButton = closeButton;
+                dialog.CancelButton = closeButton;
+
+                dialog.ShowDialog(this);
+            }
+        }
+
         async Task ExportButton_Click()
         {
             if (exportRunning) return;
@@ -507,7 +617,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             }
         }
 
-        bool TryBuildOptions(out MeasurementBatchExport.Options options, out string error)
+        bool TryBuildOptions(out MeasurementBatchExport.Options options, out string error, bool requireExportTargets = true)
         {
             options = null;
             error = null;
@@ -537,17 +647,21 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             if (jsonCheckBox.Checked) formats |= MeasurementBatchExport.Formats.Json;
             if (lineProtocolCheckBox.Checked) formats |= MeasurementBatchExport.Formats.LineProtocol;
 
-            if (formats == MeasurementBatchExport.Formats.None)
-            {
-                error = Localization.T("Please select at least one export format.");
-                return false;
-            }
-
             var outputDir = outputDirTextBox.Text != null ? outputDirTextBox.Text.Trim() : string.Empty;
-            if (string.IsNullOrWhiteSpace(outputDir))
+
+            if (requireExportTargets)
             {
-                error = Localization.T("Please select an output folder.");
-                return false;
+                if (formats == MeasurementBatchExport.Formats.None)
+                {
+                    error = Localization.T("Please select at least one export format.");
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(outputDir))
+                {
+                    error = Localization.T("Please select an output folder.");
+                    return false;
+                }
             }
 
             int? limit = null;
@@ -599,6 +713,7 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             browseButton.Enabled = enabled;
             selectAllButton.Enabled = enabled;
             selectNoneButton.Enabled = enabled;
+            previewSqlButton.Enabled = enabled;
             exportButton.Enabled = enabled;
         }
 

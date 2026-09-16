@@ -308,11 +308,32 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
 
         void RebuildSavedQueryMenus()
         {
-            RebuildSavedQueryMenu(favoritesMenuItem, QueryLibrary.Favorites, false);
-            RebuildSavedQueryMenu(historyMenuItem, QueryLibrary.History, true);
+            RebuildSavedQueryMenu(favoritesMenuItem, QueryLibrary.Favorites, false, int.MaxValue);
+            RebuildHistoryMenu();
         }
 
-        void RebuildSavedQueryMenu(ToolStripMenuItem parent, IList<SavedQuery> items, bool history)
+        void RebuildHistoryMenu()
+        {
+            const int recentHistoryInMenu = 10;
+            RebuildSavedQueryMenu(historyMenuItem, QueryLibrary.History, true, recentHistoryInMenu);
+
+            historyMenuItem.DropDownItems.Add(new ToolStripSeparator());
+
+            var viewAll = new ToolStripMenuItem(Localization.T("View All History..."));
+            viewAll.Click += (s, e) => OpenHistoryBrowser();
+            historyMenuItem.DropDownItems.Add(viewAll);
+        }
+
+        void OpenHistoryBrowser()
+        {
+            using (var dialog = new QueryHistoryDialog())
+            {
+                if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+                ApplySavedQuery(dialog.SelectedQuery);
+            }
+        }
+
+        void RebuildSavedQueryMenu(ToolStripMenuItem parent, IList<SavedQuery> items, bool history, int maxItems)
         {
             HideSavedQueryToolTip();
             parent.DropDownItems.Clear();
@@ -323,9 +344,10 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                 return;
             }
 
-            foreach (var item in items)
+            var count = Math.Min(items.Count, maxItems);
+            for (var i = 0; i < count; i++)
             {
-                var entry = item;
+                var entry = items[i];
                 var sql = entry.Sql ?? string.Empty;
                 var root = new ToolStripMenuItem(QueryLibrary.GetDisplayText(entry, history));
                 root.Click += (s, e) => ApplySavedQuery(entry);
