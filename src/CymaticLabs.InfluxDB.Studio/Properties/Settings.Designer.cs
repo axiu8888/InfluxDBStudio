@@ -49,7 +49,7 @@ namespace CymaticLabs.InfluxDB.Studio.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("hh:mm:ss tt")]
+        [global::System.Configuration.DefaultSettingValueAttribute("HH:mm:ss")]
         public string TimeFormat {
             get {
                 return ((string)(this["TimeFormat"]));
@@ -61,7 +61,7 @@ namespace CymaticLabs.InfluxDB.Studio.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("M/dd/yyyy")]
+        [global::System.Configuration.DefaultSettingValueAttribute("yyyy-MM-dd")]
         public string DateFormat {
             get {
                 return ((string)(this["DateFormat"]));

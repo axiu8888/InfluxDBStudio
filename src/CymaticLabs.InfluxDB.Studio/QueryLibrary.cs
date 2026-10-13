@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using CymaticLabs.InfluxDB.Studio.Properties;
 
 namespace CymaticLabs.InfluxDB.Studio
 {
@@ -134,9 +133,9 @@ namespace CymaticLabs.InfluxDB.Studio
         static void EnsureLoaded()
         {
             if (favorites == null)
-                favorites = LoadList(Settings.Default.QueryFavoritesJson);
+                favorites = LoadList(AppForm.Settings != null ? AppForm.Settings.QueryFavoritesJson : null);
             if (history == null)
-                history = LoadList(Settings.Default.QueryHistoryJson);
+                history = LoadList(AppForm.Settings != null ? AppForm.Settings.QueryHistoryJson : null);
         }
 
         static List<SavedQuery> LoadList(string json)
@@ -156,14 +155,14 @@ namespace CymaticLabs.InfluxDB.Studio
 
         static void SaveFavorites()
         {
-            Settings.Default.QueryFavoritesJson = JsonConvert.SerializeObject(favorites);
-            Settings.Default.Save();
+            if (AppForm.Settings == null) return;
+            AppForm.Settings.QueryFavoritesJson = JsonConvert.SerializeObject(favorites);
         }
 
         static void SaveHistory()
         {
-            Settings.Default.QueryHistoryJson = JsonConvert.SerializeObject(history);
-            Settings.Default.Save();
+            if (AppForm.Settings == null) return;
+            AppForm.Settings.QueryHistoryJson = JsonConvert.SerializeObject(history);
         }
 
         static string FirstLine(string sql)

@@ -10,7 +10,6 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using CymaticLabs.InfluxDB.Data;
 using CymaticLabs.InfluxDB.Studio.Controls;
-using CymaticLabs.InfluxDB.Studio.Properties;
 
 namespace CymaticLabs.InfluxDB.Studio.Dialogs
 {
@@ -348,7 +347,9 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
 
         void RestoreLastExportDirectory()
         {
-            var last = Settings.Default.LastMeasurementExportDirectory;
+            var last = AppForm.Settings != null
+                ? AppForm.Settings.LastMeasurementExportDirectory
+                : null;
             if (!string.IsNullOrWhiteSpace(last) && Directory.Exists(last))
                 outputDirTextBox.Text = last;
         }
@@ -358,12 +359,12 @@ namespace CymaticLabs.InfluxDB.Studio.Dialogs
             if (string.IsNullOrWhiteSpace(path)) return;
             path = path.Trim();
             if (!Directory.Exists(path)) return;
+            if (AppForm.Settings == null) return;
 
-            if (string.Equals(Settings.Default.LastMeasurementExportDirectory, path, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(AppForm.Settings.LastMeasurementExportDirectory, path, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            Settings.Default.LastMeasurementExportDirectory = path;
-            Settings.Default.Save();
+            AppForm.Settings.LastMeasurementExportDirectory = path;
         }
 
         void LoadRetentionPolicies(IEnumerable<InfluxDbRetentionPolicy> policies)

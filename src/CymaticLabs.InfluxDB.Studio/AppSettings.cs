@@ -28,6 +28,11 @@ namespace CymaticLabs.InfluxDB.Studio
         public const string TimeFormat24Hour = "HH:mm:ss";
 
         /// <summary>
+        /// Preferred default date format.
+        /// </summary>
+        public const string DateFormatIso = "yyyy-MM-dd";
+
+        /// <summary>
         /// Date format string for day-first dates.
         /// </summary>
         public const string DateFormatDay = "d/MM/yyyy";
@@ -36,6 +41,10 @@ namespace CymaticLabs.InfluxDB.Studio
         /// Date format string for month-first dates.
         /// </summary>
         public const string DateFormatMonth = "M/dd/yyyy";
+
+        // Historical factory defaults from the original English app / old user.config.
+        const string LegacyFactoryTimeFormat = "hh:mm:ss tt";
+        const string LegacyFactoryDateFormat = "M/dd/yyyy";
 
         /// <summary>
         /// Preset date format strings shown in Settings.
@@ -74,9 +83,25 @@ namespace CymaticLabs.InfluxDB.Studio
         // UI language (en / zh-CN)
         string language;
 
+        string queryFavoritesJson = string.Empty;
+        string queryHistoryJson = string.Empty;
+        string lastMeasurementExportDirectory = string.Empty;
+
+        // Bumped when preferred ISO defaults replace old English factory formats.
+        const int CurrentFormatDefaultsVersion = 2;
+        int formatDefaultsVersion;
+
         #endregion Fields
 
         #region Properties
+
+        /// <summary>
+        /// Path to portable app settings (same folder as the exe).
+        /// </summary>
+        public static string SettingsFilePath
+        {
+            get { return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json"); }
+        }
 
         /// <summary>
         /// Gets or sets the application version the settings are for/from.
@@ -95,8 +120,7 @@ namespace CymaticLabs.InfluxDB.Studio
                 if (timeFormat != value)
                 {
                     timeFormat = value;
-                    Properties.Settings.Default.TimeFormat = timeFormat;
-                    Properties.Settings.Default.Save(); // update settings file
+                    SavePortableSettings();
                 }
             }
         }
@@ -138,8 +162,7 @@ namespace CymaticLabs.InfluxDB.Studio
                 if (dateFormat != value)
                 {
                     dateFormat = value;
-                    Properties.Settings.Default.DateFormat = dateFormat;
-                    Properties.Settings.Default.Save(); // update settings file
+                    SavePortableSettings();
                 }
             }
         }
@@ -156,8 +179,7 @@ namespace CymaticLabs.InfluxDB.Studio
                 if (language != value)
                 {
                     language = value ?? string.Empty;
-                    Properties.Settings.Default.Language = language;
-                    Properties.Settings.Default.Save();
+                    SavePortableSettings();
                 }
             }
         }
@@ -175,9 +197,47 @@ namespace CymaticLabs.InfluxDB.Studio
                 if (allowUntrustedSsl != value)
                 {
                     allowUntrustedSsl = value;
-                    Properties.Settings.Default.AllowUntrustedSsl = allowUntrustedSsl;
-                    Properties.Settings.Default.Save(); // update settings file
+                    SavePortableSettings();
                 }
+            }
+        }
+
+        /// <summary>
+        /// Serialized query favorites JSON (portable settings).
+        /// </summary>
+        public string QueryFavoritesJson
+        {
+            get { return queryFavoritesJson ?? string.Empty; }
+            set
+            {
+                queryFavoritesJson = value ?? string.Empty;
+                SavePortableSettings();
+            }
+        }
+
+        /// <summary>
+        /// Serialized query history JSON (portable settings).
+        /// </summary>
+        public string QueryHistoryJson
+        {
+            get { return queryHistoryJson ?? string.Empty; }
+            set
+            {
+                queryHistoryJson = value ?? string.Empty;
+                SavePortableSettings();
+            }
+        }
+
+        /// <summary>
+        /// Last folder used by measurement export.
+        /// </summary>
+        public string LastMeasurementExportDirectory
+        {
+            get { return lastMeasurementExportDirectory ?? string.Empty; }
+            set
+            {
+                lastMeasurementExportDirectory = value ?? string.Empty;
+                SavePortableSettings();
             }
         }
 
@@ -192,18 +252,23 @@ namespace CymaticLabs.InfluxDB.Studio
 
         public AppSettings()
         {
-            // Initialize default settings
-            timeFormat = TimeFormat12Hour;
-            dateFormat = DateFormatMonth;
+            // Preferred defaults (also used when settings.json is missing).
+            timeFormat = TimeFormat24Hour;
+            dateFormat = DateFormatIso;
             language = string.Empty;
             allowUntrustedSsl = false;
+            queryFavoritesJson = string.Empty;
+            queryHistoryJson = string.Empty;
+            lastMeasurementExportDirectory = string.Empty;
+            formatDefaultsVersion = CurrentFormatDefaultsVersion;
             Connections = new List<InfluxDbConnection>();
 
             // Set the version string
             Version = GetType().Assembly.GetName().Version.ToString();
 
-            // Upgrade settings as needed
-            Properties.Settings.Default.Upgrade();
+            // Upgrade legacy user.config once (for migration into settings.json).
+            try { Properties.Settings.Default.Upgrade(); }
+            catch { }
         }
 
         #endregion Constructors
@@ -384,23 +449,178 @@ namespace CymaticLabs.InfluxDB.Studio
         /// </summary>
         public void LoadAll()
         {
-            timeFormat = Properties.Settings.Default.TimeFormat;
-            dateFormat = Properties.Settings.Default.DateFormat;
-            language = Properties.Settings.Default.Language;
-            allowUntrustedSsl = Properties.Settings.Default.AllowUntrustedSsl;
+            LoadPortableSettings();
             LoadConnections();
         }
 
         /// <summary>
-        /// Saves all current settings ti disk.
+        /// Saves all current settings to disk.
         /// </summary>
         public void SaveAll()
         {
-            Properties.Settings.Default.TimeFormat = TimeFormat;
-            Properties.Settings.Default.DateFormat = DateFormat;
-            Properties.Settings.Default.Language = Language;
-            Properties.Settings.Default.AllowUntrustedSsl = AllowUntrustedSsl;
+            SavePortableSettings();
             SaveConnections();
+        }
+
+        /// <summary>
+        /// Reads the language preference from portable settings (or legacy user.config).
+        /// Safe to call before the main form exists.
+        /// </summary>
+        public static string ReadPortableLanguage()
+        {
+            try
+            {
+                var path = SettingsFilePath;
+                if (File.Exists(path))
+                {
+                    var data = JsonConvert.DeserializeObject<PortableSettingsData>(
+                        File.ReadAllText(path, Encoding.UTF8));
+                    if (data != null && data.Language != null)
+                        return data.Language;
+                }
+            }
+            catch { }
+
+            try
+            {
+                return Properties.Settings.Default.Language ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        void LoadPortableSettings()
+        {
+            try
+            {
+                var path = SettingsFilePath;
+                if (File.Exists(path))
+                {
+                    var data = JsonConvert.DeserializeObject<PortableSettingsData>(
+                        File.ReadAllText(path, Encoding.UTF8));
+                    if (data != null)
+                    {
+                        ApplyPortableData(data);
+                        if (UpgradeLegacyFactoryFormatsIfNeeded())
+                            SavePortableSettings();
+                        return;
+                    }
+                }
+
+                // One-time migration from path-scoped user.config.
+                MigrateFromLegacyUserConfig();
+                UpgradeLegacyFactoryFormatsIfNeeded();
+                formatDefaultsVersion = CurrentFormatDefaultsVersion;
+                SavePortableSettings();
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
+        void MigrateFromLegacyUserConfig()
+        {
+            try
+            {
+                var legacyTime = Properties.Settings.Default.TimeFormat;
+                var legacyDate = Properties.Settings.Default.DateFormat;
+
+                // Do NOT import the original app factory defaults — keep yyyy-MM-dd / HH:mm:ss.
+                if (!string.IsNullOrWhiteSpace(legacyTime) && !IsLegacyFactoryTimeFormat(legacyTime))
+                    timeFormat = legacyTime;
+                if (!string.IsNullOrWhiteSpace(legacyDate) && !IsLegacyFactoryDateFormat(legacyDate))
+                    dateFormat = legacyDate;
+
+                language = Properties.Settings.Default.Language ?? string.Empty;
+                allowUntrustedSsl = Properties.Settings.Default.AllowUntrustedSsl;
+                queryFavoritesJson = Properties.Settings.Default.QueryFavoritesJson ?? string.Empty;
+                queryHistoryJson = Properties.Settings.Default.QueryHistoryJson ?? string.Empty;
+                lastMeasurementExportDirectory =
+                    Properties.Settings.Default.LastMeasurementExportDirectory ?? string.Empty;
+            }
+            catch { }
+        }
+
+        void ApplyPortableData(PortableSettingsData data)
+        {
+            if (!string.IsNullOrWhiteSpace(data.TimeFormat)) timeFormat = data.TimeFormat;
+            if (!string.IsNullOrWhiteSpace(data.DateFormat)) dateFormat = data.DateFormat;
+            language = data.Language ?? string.Empty;
+            allowUntrustedSsl = data.AllowUntrustedSsl;
+            queryFavoritesJson = data.QueryFavoritesJson ?? string.Empty;
+            queryHistoryJson = data.QueryHistoryJson ?? string.Empty;
+            lastMeasurementExportDirectory = data.LastMeasurementExportDirectory ?? string.Empty;
+            formatDefaultsVersion = data.FormatDefaultsVersion;
+        }
+
+        /// <summary>
+        /// One-time: replace old English factory formats with preferred ISO defaults.
+        /// After FormatDefaultsVersion is bumped, intentional choices like M/dd/yyyy are kept.
+        /// </summary>
+        bool UpgradeLegacyFactoryFormatsIfNeeded()
+        {
+            if (formatDefaultsVersion >= CurrentFormatDefaultsVersion)
+                return false;
+
+            if (IsLegacyFactoryTimeFormat(timeFormat))
+                timeFormat = TimeFormat24Hour;
+            if (IsLegacyFactoryDateFormat(dateFormat))
+                dateFormat = DateFormatIso;
+
+            formatDefaultsVersion = CurrentFormatDefaultsVersion;
+            return true; // always persist the version bump
+        }
+
+        static bool IsLegacyFactoryTimeFormat(string value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                || string.Equals(value, LegacyFactoryTimeFormat, StringComparison.OrdinalIgnoreCase);
+        }
+
+        static bool IsLegacyFactoryDateFormat(string value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                || string.Equals(value, LegacyFactoryDateFormat, StringComparison.OrdinalIgnoreCase);
+        }
+
+        void SavePortableSettings()
+        {
+            try
+            {
+                var data = new PortableSettingsData
+                {
+                    TimeFormat = timeFormat,
+                    DateFormat = dateFormat,
+                    Language = language ?? string.Empty,
+                    AllowUntrustedSsl = allowUntrustedSsl,
+                    QueryFavoritesJson = queryFavoritesJson ?? string.Empty,
+                    QueryHistoryJson = queryHistoryJson ?? string.Empty,
+                    LastMeasurementExportDirectory = lastMeasurementExportDirectory ?? string.Empty,
+                    FormatDefaultsVersion = formatDefaultsVersion
+                };
+
+                var json = JsonConvert.SerializeObject(data, Formatting.Indented);
+                File.WriteAllText(SettingsFilePath, json, Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                AppForm.DisplayException(ex);
+            }
+        }
+
+        sealed class PortableSettingsData
+        {
+            public string TimeFormat { get; set; }
+            public string DateFormat { get; set; }
+            public string Language { get; set; }
+            public bool AllowUntrustedSsl { get; set; }
+            public string QueryFavoritesJson { get; set; }
+            public string QueryHistoryJson { get; set; }
+            public string LastMeasurementExportDirectory { get; set; }
+            public int FormatDefaultsVersion { get; set; }
         }
 
         /// <summary>

@@ -425,7 +425,7 @@ namespace CymaticLabs.InfluxDB.Studio
         /// </summary>
         public static void ApplySavedCulture()
         {
-            var language = Properties.Settings.Default.Language;
+            var language = AppSettings.ReadPortableLanguage();
             if (string.IsNullOrWhiteSpace(language))
             {
                 language = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh"
@@ -456,8 +456,8 @@ namespace CymaticLabs.InfluxDB.Studio
             if (string.Equals(normalized, CurrentLanguage, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            Properties.Settings.Default.Language = normalized;
-            Properties.Settings.Default.Save();
+            if (AppForm.Settings != null)
+                AppForm.Settings.Language = normalized;
             ApplyCulture(normalized);
             Application.Restart();
         }

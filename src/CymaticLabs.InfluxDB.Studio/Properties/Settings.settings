@@ -9,10 +9,10 @@
       <Value Profile="(Default)">False</Value>
     </Setting>
     <Setting Name="TimeFormat" Type="System.String" Scope="User">
-      <Value Profile="(Default)">hh:mm:ss tt</Value>
+      <Value Profile="(Default)">HH:mm:ss</Value>
     </Setting>
     <Setting Name="DateFormat" Type="System.String" Scope="User">
-      <Value Profile="(Default)">M/dd/yyyy</Value>
+      <Value Profile="(Default)">yyyy-MM-dd</Value>
     </Setting>
     <Setting Name="Language" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
