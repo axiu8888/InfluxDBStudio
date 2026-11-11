@@ -389,8 +389,8 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
                     var start = i;
                     i++;
                     while (i < sql.Length && (char.IsDigit(sql[i]) || sql[i] == '.')) i++;
-                    if (i + 1 < sql.Length && sql[i] == 'm' && sql[i + 1] == 's') i += 2;
-                    else if (i < sql.Length && "usmhdw".IndexOf(sql[i]) >= 0) i++;
+                    // Keep Influx duration literals intact: 100d, 1h, 30s, 5ms, 1794...ns, etc.
+                    i += ReadDurationUnitLength(sql, i);
                     tokens.Add(sql.Substring(start, i - start));
                     continue;
                 }
@@ -433,6 +433,32 @@ namespace CymaticLabs.InfluxDB.Studio.Controls
             }
 
             return sql.Substring(start, i - start);
+        }
+
+        /// <summary>
+        /// Length of an InfluxQL duration unit starting at <paramref name="index"/>, or 0.
+        /// Supports ns, ms, u/µ, s, m, h, d, w.
+        /// </summary>
+        static int ReadDurationUnitLength(string sql, int index)
+        {
+            if (index >= sql.Length) return 0;
+
+            if (index + 1 < sql.Length)
+            {
+                var a = char.ToLowerInvariant(sql[index]);
+                var b = char.ToLowerInvariant(sql[index + 1]);
+                if (a == 'n' && b == 's') return 2; // nanoseconds
+                if (a == 'm' && b == 's') return 2; // milliseconds
+            }
+
+            var c = sql[index];
+            if (c == 'u' || c == 'U' || c == 'µ') return 1; // microseconds
+            if (c == 's' || c == 'S') return 1;
+            if (c == 'm' || c == 'M') return 1;
+            if (c == 'h' || c == 'H') return 1;
+            if (c == 'd' || c == 'D') return 1;
+            if (c == 'w' || c == 'W') return 1;
+            return 0;
         }
     }
 }
